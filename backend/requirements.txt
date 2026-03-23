@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+pymysql
+SQLAlchemy
+python-dotenv
+bcrypt
+python-multipart
+pydantic[email]
+email-validator
+python-jose
+aiofiles
+authlib
+httpx
+alembic==1.13.2
+itsdangerous
