@@ -6,6 +6,7 @@ from typing import Annotated
 from app.schema.stock_schema import StockCreate,StockResponse,StockConsumptionReport,TotalProductStock,StockExpireAlert
 from app.routes.basemodel import get_db
 from app.middlewares.admin import admin_validation
+from app.middlewares.auth import AuthMiddleware
 from app.models.users import User
 from app.models.products import Products
 from app.models.stock import Stocks
@@ -273,4 +274,14 @@ def expiration_alert(db: Session = Depends(get_db),current_admin: User = Depends
         )
 
     return alerts
-        
+@router.get("/by-product/{product_id}", response_model=StockResponse, status_code=status.HTTP_200_OK)
+def get_stock_by_product(product_id: int, db: Session = Depends(get_db), current_user: User = Depends(AuthMiddleware)):
+    stock = db.query(Stocks).filter(
+        Stocks.product_id == product_id,
+        Stocks.quantity > 0
+    ).order_by(Stocks.expiry_date.asc().nullslast()).first()
+
+    if not stock:
+        raise HTTPException(status_code=404, detail="No available stock for this product")
+
+    return stock

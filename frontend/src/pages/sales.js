@@ -2,12 +2,11 @@
 // POST /sales/create
 // GET  /sales/{id}/salesreceipt
 
-import { api }                                     from '../js/api.js';
-import { auth }                                    from '../js/auth.js';
+import { api }                                    from '../js/api.js';
+import { auth }                                   from '../js/auth.js';
 import { renderSidebar, renderTopbar, bindSidebar,
          openModal, closeModal, bindModalClose,
-         fmt, fmtDateTime, tableEmptyRow,
-         tableLoadingRow, icons }                  from '../js/ui.js';
+         fmt, fmtDateTime, icons }                from '../js/ui.js';
 
 export function renderSales() {
   return `
@@ -18,7 +17,7 @@ export function renderSales() {
       <div class="page-body">
 
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
-          <p style="font-size:13px;color:var(--muted)">Process a new sale or look up a receipt by Sale ID.</p>
+          <p style="font-size:13px;color:var(--muted)">Search a product to start a new sale or look up a receipt.</p>
           <button id="new-sale-btn" class="btn btn-primary">${icons.plus} New Sale</button>
         </div>
 
@@ -35,7 +34,7 @@ export function renderSales() {
           <div id="receipt-result" style="margin-top:16px;display:none;"></div>
         </div>
 
-        <!-- Recent transactions placeholder -->
+        <!-- Transaction history -->
         <div class="card" style="overflow:hidden;">
           <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
             <span style="font-size:13px;font-weight:500;color:var(--text)">Transaction History</span>
@@ -51,128 +50,120 @@ export function renderSales() {
 
   <!-- New Sale Modal -->
   <div id="new-sale-modal" class="modal-backdrop">
-    <div class="modal">
+    <div class="modal" style="max-width:520px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
         <h2 style="font-family:var(--font-head);font-size:20px;color:var(--text)">New Sale</h2>
         <button data-close-modal class="btn btn-ghost" style="padding:6px 10px;">${icons.x}</button>
       </div>
+
       <div id="ns-error" class="banner banner-error"><span></span></div>
       <div id="ns-success" class="banner banner-success">
-        <span>Sale recorded! </span><span id="ns-receipt-link" style="color:var(--accent-lt);cursor:pointer;text-decoration:underline;"></span>
+        <span id="ns-success-msg">Sale recorded!</span>
       </div>
 
-      <form id="new-sale-form" novalidate style="display:flex;flex-direction:column;gap:14px;">
-        <div>
-          <label class="field-label">Stock ID</label>
-          <input class="field-input" id="ns-stock-id" type="number" placeholder="Enter stock ID" min="1"/>
-          <p class="field-hint hint-error" id="ns-sid-hint"></p>
+      <!-- Step 1: Search product -->
+      <div id="step-search">
+        <div style="margin-bottom:14px;">
+          <label class="field-label">Search Product</label>
+          <div style="display:flex;gap:8px;">
+            <input class="field-input" id="ns-product-search" type="text" placeholder="e.g. Paracetamol…"/>
+            <button id="ns-search-btn" class="btn btn-ghost" style="flex-shrink:0;">
+              ${icons.search} Search
+            </button>
+          </div>
+          <p class="field-hint hint-error" id="ns-search-hint"></p>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+
+        <!-- Search results -->
+        <div id="ns-search-results" style="display:none;margin-bottom:14px;">
+          <label class="field-label">Select Product</label>
+          <div id="ns-results-list" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;"></div>
+        </div>
+      </div>
+
+      <!-- Step 2: Sale form (shown after product selected) -->
+      <div id="step-form" style="display:none;">
+
+        <!-- Selected product info -->
+        <div id="ns-product-info" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <div id="ns-product-name" style="font-size:14px;font-weight:500;color:var(--text);"></div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px;">
+                Available: <span id="ns-stock-qty" style="color:var(--accent-lt);font-weight:500;"></span>
+                &nbsp;·&nbsp; Unit price: <span id="ns-unit-price" style="color:var(--accent-lt);font-weight:500;"></span>
+              </div>
+            </div>
+            <button type="button" id="ns-change-product" class="btn btn-ghost" style="font-size:11px;padding:5px 10px;">Change</button>
+          </div>
+        </div>
+
+        <form id="ns-sale-form" novalidate style="display:flex;flex-direction:column;gap:14px;">
+          <input type="hidden" id="ns-stock-id"/>
+          <input type="hidden" id="ns-selling-price"/>
+
           <div>
             <label class="field-label">Quantity</label>
             <input class="field-input" id="ns-qty" type="number" placeholder="0" min="1"/>
             <p class="field-hint hint-error" id="ns-qty-hint"></p>
           </div>
-          <div>
-            <label class="field-label">Selling Price (₦)</label>
-            <input class="field-input" id="ns-price" type="number" placeholder="0.00" min="0" step="0.01"/>
-            <p class="field-hint hint-error" id="ns-price-hint"></p>
+
+          <!-- Total preview -->
+          <div id="sale-total-preview" style="display:none;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;color:var(--muted);">Total Amount</span>
+              <span id="sale-total-val" style="font-family:var(--font-head);font-size:24px;color:var(--accent-lt);">₦0.00</span>
+            </div>
           </div>
-        </div>
 
-        <!-- Total preview -->
-        <div id="sale-total-preview" style="display:none;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;">
-          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Estimated Total</div>
-          <div id="sale-total-val" style="font-family:var(--font-head);font-size:22px;color:var(--accent-lt)">₦0.00</div>
-        </div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
+            <button type="button" data-close-modal class="btn btn-ghost">Cancel</button>
+            <button type="submit" id="ns-submit" class="btn btn-primary">Record Sale</button>
+          </div>
+        </form>
+      </div>
 
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
-          <button type="button" data-close-modal class="btn btn-ghost">Cancel</button>
-          <button type="submit" id="ns-submit" class="btn btn-primary">Record Sale</button>
-        </div>
-      </form>
     </div>
   </div>`;
 }
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let selectedProduct = null;
 
 export function initSales() {
   bindSidebar();
   bindModalClose('new-sale-modal');
 
+  // Open modal
   document.getElementById('new-sale-btn')?.addEventListener('click', () => {
-    document.getElementById('new-sale-form')?.reset();
-    document.getElementById('ns-error').classList.remove('show');
-    document.getElementById('ns-success').classList.remove('show');
-    document.getElementById('sale-total-preview').style.display = 'none';
+    resetSaleModal();
     openModal('new-sale-modal');
   });
 
+  // Search on Enter key
+  document.getElementById('ns-product-search')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('ns-search-btn')?.click();
+  });
+
+  // Search button
+  document.getElementById('ns-search-btn')?.addEventListener('click', searchProduct);
+
+  // Change product button
+  document.getElementById('ns-change-product')?.addEventListener('click', () => {
+    document.getElementById('step-form').style.display   = 'none';
+    document.getElementById('step-search').style.display = 'block';
+    document.getElementById('ns-search-results').style.display = 'none';
+    document.getElementById('ns-product-search').value  = '';
+    document.getElementById('ns-error').classList.remove('show');
+  });
+
   // Live total preview
-  ['ns-qty', 'ns-price'].forEach(id => {
-    document.getElementById(id)?.addEventListener('input', updateTotalPreview);
-  });
+  document.getElementById('ns-qty')?.addEventListener('input', updateTotal);
 
-  bindNewSale();
-  bindReceiptLookup();
-}
+  // Sale form submit
+  document.getElementById('ns-sale-form')?.addEventListener('submit', submitSale);
 
-function updateTotalPreview() {
-  const qty   = parseFloat(document.getElementById('ns-qty')?.value) || 0;
-  const price = parseFloat(document.getElementById('ns-price')?.value) || 0;
-  const prev  = document.getElementById('sale-total-preview');
-  const val   = document.getElementById('sale-total-val');
-  if (qty > 0 && price > 0) {
-    prev.style.display = 'block';
-    val.textContent = `₦${fmt(qty * price)}`;
-  } else {
-    prev.style.display = 'none';
-  }
-}
-
-function bindNewSale() {
-  document.getElementById('new-sale-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const errEl = document.getElementById('ns-error');
-    const sucEl = document.getElementById('ns-success');
-    const btn   = document.getElementById('ns-submit');
-    errEl.classList.remove('show');
-    sucEl.classList.remove('show');
-
-    const stockId = parseInt(document.getElementById('ns-stock-id').value);
-    const qty     = parseInt(document.getElementById('ns-qty').value);
-    const price   = parseFloat(document.getElementById('ns-price').value);
-
-    let ok = true;
-    if (!stockId || stockId < 1) { document.getElementById('ns-sid-hint').textContent = 'Enter a valid stock ID.'; ok = false; }
-    else document.getElementById('ns-sid-hint').textContent = '';
-    if (!qty || qty < 1) { document.getElementById('ns-qty-hint').textContent = 'Quantity must be at least 1.'; ok = false; }
-    else document.getElementById('ns-qty-hint').textContent = '';
-    if (!price || price <= 0) { document.getElementById('ns-price-hint').textContent = 'Enter a valid selling price.'; ok = false; }
-    else document.getElementById('ns-price-hint').textContent = '';
-    if (!ok) return;
-
-    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Processing…';
-    try {
-      const sale = await api.post('/sales/create', {
-        stock_id: stockId, quantity_sold: qty, selling_price: price,
-      });
-
-      const link = document.getElementById('ns-receipt-link');
-      link.textContent = `View Receipt #${sale.id}`;
-      link.onclick = () => { closeModal('new-sale-modal'); fetchReceipt(sale.id); };
-      sucEl.classList.add('show');
-      e.target.reset();
-      document.getElementById('sale-total-preview').style.display = 'none';
-    } catch (err) {
-      errEl.querySelector('span').textContent = err.message;
-      errEl.classList.add('show');
-    } finally {
-      btn.disabled = false; btn.innerHTML = 'Record Sale';
-    }
-  });
-}
-
-function bindReceiptLookup() {
+  // Receipt lookup
   document.getElementById('receipt-btn')?.addEventListener('click', () => {
     const id = parseInt(document.getElementById('receipt-id').value);
     if (!id || id < 1) return;
@@ -183,10 +174,201 @@ function bindReceiptLookup() {
   });
 }
 
+function resetSaleModal() {
+  selectedProduct = null;
+  document.getElementById('step-search').style.display       = 'block';
+  document.getElementById('step-form').style.display         = 'none';
+  document.getElementById('ns-search-results').style.display = 'none';
+  document.getElementById('ns-product-search').value         = '';
+  document.getElementById('ns-qty').value                    = '';
+  document.getElementById('ns-error').classList.remove('show');
+  document.getElementById('ns-success').classList.remove('show');
+  document.getElementById('sale-total-preview').style.display = 'none';
+  document.getElementById('ns-search-hint').textContent      = '';
+}
+
+// ── Step 1: Search product ────────────────────────────────────────────────────
+async function searchProduct() {
+  const query = document.getElementById('ns-product-search').value.trim();
+  const hint  = document.getElementById('ns-search-hint');
+  const btn   = document.getElementById('ns-search-btn');
+
+  if (!query) { hint.textContent = 'Enter a product name to search.'; return; }
+  hint.textContent = '';
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="border-top-color:var(--accent)"></span>';
+
+  try {
+    const results = await api.get(`/stock/total/search?product_name=${encodeURIComponent(query)}`);
+    const listEl  = document.getElementById('ns-results-list');
+    const resEl   = document.getElementById('ns-search-results');
+
+    if (!results.length) {
+      hint.textContent = 'No products found. Try a different name.';
+      resEl.style.display = 'none';
+      return;
+    }
+
+    resEl.style.display = 'block';
+    listEl.innerHTML = results.map(p => `
+      <div class="product-result-item"
+        data-id="${p.product_id}"
+        data-name="${p.product_name}"
+        data-qty="${p.total_quantity}"
+        style="display:flex;align-items:center;justify-content:space-between;
+               padding:10px 12px;background:var(--surface2);border:1px solid var(--border2);
+               border-radius:8px;cursor:${p.total_quantity > 0 ? 'pointer' : 'not-allowed'};
+               opacity:${p.total_quantity > 0 ? '1' : '0.5'};">
+        <div>
+          <div style="font-size:13px;font-weight:500;color:var(--text)">${p.product_name}</div>
+          <div style="font-size:11px;margin-top:2px;">
+            ${p.total_quantity > 0
+              ? `<span style="color:var(--accent-lt)">${p.total_quantity} units available</span>`
+              : `<span style="color:#f87171">Out of stock</span>`}
+          </div>
+        </div>
+        ${p.total_quantity > 0
+          ? `<span class="badge badge-green">Select</span>`
+          : `<span class="badge badge-red">Unavailable</span>`}
+      </div>`).join('');
+
+    listEl.querySelectorAll('.product-result-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const qty = parseInt(item.getAttribute('data-qty'));
+        if (qty <= 0) return;
+        selectProduct(
+          parseInt(item.getAttribute('data-id')),
+          item.getAttribute('data-name'),
+          qty
+        );
+      });
+    });
+
+  } catch (err) {
+    hint.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `${icons.search} Search`;
+  }
+}
+
+// ── Step 2: Product selected → fetch price + stock_id ────────────────────────
+async function selectProduct(productId, productName, totalQty) {
+  const errEl = document.getElementById('ns-error');
+  errEl.classList.remove('show');
+
+  try {
+    // Get product price
+    const details   = await api.get(`/product/${productId}/details`);
+    // Get stock_id (FEFO — earliest expiry first)
+    const stockData = await api.get(`/stock/by-product/${productId}`);
+
+    selectedProduct = {
+      product_id:   productId,
+      product_name: productName,
+      total_qty:    totalQty,
+      price:        parseFloat(details.price),
+      stock_id:     stockData.id,
+    };
+
+    document.getElementById('ns-product-name').textContent = productName;
+    document.getElementById('ns-stock-qty').textContent    = `${totalQty} units`;
+    document.getElementById('ns-unit-price').textContent   = `₦${fmt(details.price)}`;
+    document.getElementById('ns-stock-id').value           = stockData.id;
+    document.getElementById('ns-selling-price').value      = details.price;
+
+    document.getElementById('step-search').style.display = 'none';
+    document.getElementById('step-form').style.display   = 'block';
+    document.getElementById('ns-qty').focus();
+
+  } catch (err) {
+    errEl.querySelector('span').textContent = err.message;
+    errEl.classList.add('show');
+  }
+}
+
+function updateTotal() {
+  const qty   = parseInt(document.getElementById('ns-qty')?.value) || 0;
+  const price = parseFloat(document.getElementById('ns-selling-price')?.value) || 0;
+  const prev  = document.getElementById('sale-total-preview');
+  const val   = document.getElementById('sale-total-val');
+
+  if (qty > 0 && price > 0) {
+    prev.style.display = 'block';
+    val.textContent    = `₦${fmt(qty * price)}`;
+  } else {
+    prev.style.display = 'none';
+  }
+}
+
+// ── Step 3: Submit sale ───────────────────────────────────────────────────────
+async function submitSale(e) {
+  e.preventDefault();
+  const errEl  = document.getElementById('ns-error');
+  const sucEl  = document.getElementById('ns-success');
+  const sucMsg = document.getElementById('ns-success-msg');
+  const btn    = document.getElementById('ns-submit');
+
+  errEl.classList.remove('show');
+  sucEl.classList.remove('show');
+
+  const qty   = parseInt(document.getElementById('ns-qty').value);
+  const price = parseFloat(document.getElementById('ns-selling-price').value);
+
+  if (!qty || qty < 1) {
+    document.getElementById('ns-qty-hint').textContent = 'Enter a valid quantity.';
+    return;
+  }
+  if (qty > selectedProduct.total_qty) {
+    document.getElementById('ns-qty-hint').textContent = `Only ${selectedProduct.total_qty} units available.`;
+    return;
+  }
+  document.getElementById('ns-qty-hint').textContent = '';
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Processing…';
+
+  try {
+    const sale = await api.post('/sales/create', {
+      stock_id:      selectedProduct.stock_id,
+      quantity_sold: qty,
+      selling_price: price,
+    });
+
+    sucMsg.innerHTML = `Sale recorded! <span style="color:var(--accent-lt);cursor:pointer;text-decoration:underline;" id="view-receipt-link">View Receipt #${sale.id}</span>`;
+    sucEl.classList.add('show');
+
+    // Update available qty
+    selectedProduct.total_qty -= qty;
+    document.getElementById('ns-stock-qty').textContent = `${selectedProduct.total_qty} units`;
+    document.getElementById('ns-qty').value = '';
+    document.getElementById('sale-total-preview').style.display = 'none';
+
+    // Bind receipt link
+    setTimeout(() => {
+      document.getElementById('view-receipt-link')?.addEventListener('click', () => {
+        closeModal('new-sale-modal');
+        document.getElementById('receipt-id').value = sale.id;
+        fetchReceipt(sale.id);
+      });
+    }, 50);
+
+  } catch (err) {
+    errEl.querySelector('span').textContent = err.message;
+    errEl.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Record Sale';
+  }
+}
+
+// ── Receipt lookup ────────────────────────────────────────────────────────────
 async function fetchReceipt(id) {
   const container = document.getElementById('receipt-result');
   container.style.display = 'block';
-  container.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;"><span class="spinner" style="border-top-color:var(--accent)"></span> Loading receipt…</div>`;
+  container.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;">
+    <span class="spinner" style="border-top-color:var(--accent)"></span> Loading receipt…</div>`;
 
   try {
     const r = await api.get(`/sales/${id}/salesreceipt`);
@@ -196,12 +378,12 @@ async function fetchReceipt(id) {
           <div style="font-family:var(--font-head);font-size:16px;color:var(--text)">Receipt #${r.sale_id}</div>
           <span class="badge badge-green">Completed</span>
         </div>
-        ${receiptRow('Product',      r.product_name)}
-        ${receiptRow('Qty Sold',     r.quantity_sold)}
-        ${receiptRow('Unit Price',   `₦${fmt(r.unit_price)}`)}
-        ${receiptRow('Total',        `<strong style="color:var(--accent-lt)">₦${fmt(r.total_amount)}</strong>`)}
-        ${receiptRow('Sold By',      r.sold_by)}
-        ${receiptRow('Date',         fmtDateTime(r.created_at))}
+        ${receiptRow('Product',    r.product_name)}
+        ${receiptRow('Qty Sold',   r.quantity_sold)}
+        ${receiptRow('Unit Price', `₦${fmt(r.unit_price)}`)}
+        ${receiptRow('Total',      `<strong style="color:var(--accent-lt)">₦${fmt(r.total_amount)}</strong>`)}
+        ${receiptRow('Sold By',    r.sold_by)}
+        ${receiptRow('Date',       fmtDateTime(r.created_at))}
       </div>`;
   } catch (err) {
     container.innerHTML = `<div style="color:#f87171;font-size:13px;">${err.message}</div>`;
@@ -209,7 +391,8 @@ async function fetchReceipt(id) {
 }
 
 function receiptRow(label, value) {
-  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;">
+  return `<div style="display:flex;justify-content:space-between;align-items:center;
+    padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">
     <span style="color:var(--muted)">${label}</span><span>${value}</span>
   </div>`;
 }
