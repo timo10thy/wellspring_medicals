@@ -200,7 +200,8 @@ async function searchProduct() {
   btn.innerHTML = '<span class="spinner" style="border-top-color:var(--accent)"></span>';
 
   try {
-    const results = await api.get(`/stock/total/search?product_name=${encodeURIComponent(query)}`);
+    const results = await api.get(`/stock/search/available?product_name=${encodeURIComponent(query)}`);
+    // const results = await api.get(`/stock/total/search?product_name=${encodeURIComponent(query)}`);
     const listEl  = document.getElementById('ns-results-list');
     const resEl   = document.getElementById('ns-search-results');
 

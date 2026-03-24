@@ -8,25 +8,31 @@ import { renderStock,      initStock }      from '../pages/stock.js';
 import { renderSales,      initSales }      from '../pages/sales.js';
 import { renderReports,    initReports }    from '../pages/reports.js';
 import { renderProfile,    initProfile }    from '../pages/profile.js';
+import { renderAdmin,      initAdmin }      from '../pages/admin.js';
 
 const app = document.getElementById('app');
 
-const PUBLIC_PAGES = ['home', 'login', 'register'];
+const PUBLIC_PAGES = ['home', 'login', 'register', 'admin-setup'];
 const ADMIN_PAGES  = ['products', 'stock', 'reports'];
 
 const PAGES = {
-  home:      { render: renderHome },
-  login:     { render: renderLogin,     init: initLogin     },
-  register:  { render: renderRegister,  init: initRegister  },
-  dashboard: { render: renderDashboard, init: initDashboard },
-  products:  { render: renderProducts,  init: initProducts  },
-  stock:     { render: renderStock,     init: initStock     },
-  sales:     { render: renderSales,     init: initSales     },
-  reports:   { render: renderReports,   init: initReports   },
-  profile:   { render: renderProfile,   init: initProfile   },
+  home:          { render: renderHome                              },
+  login:         { render: renderLogin,     init: initLogin       },
+  register:      { render: renderRegister,  init: initRegister    },
+  dashboard:     { render: renderDashboard, init: initDashboard   },
+  products:      { render: renderProducts,  init: initProducts    },
+  stock:         { render: renderStock,     init: initStock       },
+  sales:         { render: renderSales,     init: initSales       },
+  reports:       { render: renderReports,   init: initReports     },
+  profile:       { render: renderProfile,   init: initProfile     },
+  'admin-setup': { render: renderAdmin,     init: initAdmin       },
 };
 
 export function navigate(page, params = {}) {
+  // admin-setup is always accessible regardless of login state
+  if (page === 'admin-setup') {
+    _render(page, params); return;
+  }
   if ((page === 'login' || page === 'register') && auth.isLoggedIn()) {
     _render('dashboard'); return;
   }
@@ -67,6 +73,8 @@ window.addEventListener('popstate', (e) => {
 });
 
 export function initRouter() {
-  const hash = location.hash.replace('#', '').trim() || 'home';
-  navigate(hash);
+  const full = location.hash.replace('#', '').trim() || 'home';
+  const [page, queryString] = full.split('?');
+  const params = Object.fromEntries(new URLSearchParams(queryString || ''));
+  navigate(page, params);
 }

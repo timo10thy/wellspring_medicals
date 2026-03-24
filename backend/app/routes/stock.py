@@ -274,6 +274,7 @@ def expiration_alert(db: Session = Depends(get_db),current_admin: User = Depends
         )
 
     return alerts
+
 @router.get("/by-product/{product_id}", response_model=StockResponse, status_code=status.HTTP_200_OK)
 def get_stock_by_product(product_id: int, db: Session = Depends(get_db), current_user: User = Depends(AuthMiddleware)):
     stock = db.query(Stocks).filter(
@@ -285,3 +286,25 @@ def get_stock_by_product(product_id: int, db: Session = Depends(get_db), current
         raise HTTPException(status_code=404, detail="No available stock for this product")
 
     return stock
+
+
+@router.get("/search/available", response_model=list[TotalProductStock], status_code=status.HTTP_200_OK)
+def search_available_products(
+    product_name: str | None = Query(default=None, description="Search product by name"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(AuthMiddleware),  # both USER and ADMIN
+):
+    query = (
+        db.query(
+            Products.id.label("product_id"),
+            Products.name.label("product_name"),
+            func.sum(Stocks.quantity).label("total_quantity")
+        )
+        .join(Stocks, Stocks.product_id == Products.id)
+        .filter(Products.is_active == True)  # only active products
+        .group_by(Products.id, Products.name)
+        .having(func.sum(Stocks.quantity) > 0)  # only products with stock
+    )
+    if product_name:
+        query = query.filter(Products.name.ilike(f"%{product_name}%"))
+    return query.all()

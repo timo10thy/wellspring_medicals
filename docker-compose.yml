@@ -55,6 +55,7 @@ services:
       JWT_SECRET_KEY: your-super-secret-jwt-key-change-this-in-production
       JWT_ALGORITHM: HS256
       JWT_EXPIRATION_KEY: 720
+      ADMIN_SETUP_TOKEN: pharma-admin-2024-xK9mP3
     depends_on:
       db:
         condition: service_healthy

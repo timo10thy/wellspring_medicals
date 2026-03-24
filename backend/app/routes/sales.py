@@ -14,6 +14,10 @@ import logging
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sales", tags=["Sales"])
 db_dependency = Annotated[Session, Depends(get_db)]
+
+
+
+
 @router.post("/create",response_model=SaleResponse,status_code=status.HTTP_201_CREATED)
 def create_sales(sales_data: SaleCreate,db: db_dependency,current_user: User = Depends(AuthMiddleware)
 ):
