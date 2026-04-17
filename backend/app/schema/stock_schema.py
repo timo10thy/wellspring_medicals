@@ -3,11 +3,10 @@ from typing import Optional
 from datetime import datetime,date
 
 class StockCreate(BaseModel):
-    product_id:int
+    product_name: str  
     quantity: int
-    cost_price:float
+    cost_price: float
     expiry_date: Optional[date] = None
-
 
 class StockResponse(BaseModel):
     id:int

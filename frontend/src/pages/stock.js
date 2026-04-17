@@ -59,10 +59,15 @@ export function renderStock() {
       <div id="as-success" class="banner banner-success"><span>Stock added successfully.</span></div>
 
       <form id="add-stock-form" novalidate style="display:flex;flex-direction:column;gap:14px;">
+        // <div>
+        //   <label class="field-label">Product ID</label>
+        //   <input class="field-input" id="as-product-id" type="number" placeholder="Enter product ID" min="1"/>
+        //   <p class="field-hint hint-error" id="as-pid-hint"></p>
+        // </div>
         <div>
-          <label class="field-label">Product ID</label>
-          <input class="field-input" id="as-product-id" type="number" placeholder="Enter product ID" min="1"/>
-          <p class="field-hint hint-error" id="as-pid-hint"></p>
+            <label class="field-label">Product Name</label>
+            <input class="field-input" id="as-product-name" type="text" placeholder="e.g. Paracetamol 500mg"/>
+            <p class="field-hint hint-error" id="as-pid-hint"></p>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
@@ -154,13 +159,15 @@ function bindAddStock() {
     errEl.classList.remove('show');
     sucEl.classList.remove('show');
 
-    const pid    = parseInt(document.getElementById('as-product-id').value);
+    // const pid    = parseInt(document.getElementById('as-product-id').value);
+    const productName = document.getElementById('as-product-name').value.trim();
     const qty    = parseInt(document.getElementById('as-qty').value);
     const cost   = parseFloat(document.getElementById('as-cost').value);
     const expiry = document.getElementById('as-expiry').value || null;
 
     let ok = true;
-    if (!pid || pid < 1) { document.getElementById('as-pid-hint').textContent  = 'Enter a valid product ID.'; ok = false; }
+    // if (!pid || pid < 1) { document.getElementById('as-pid-hint').textContent  = 'Enter a valid product ID.'; ok = false; }
+    if (!productName) { document.getElementById('as-pid-hint').textContent = 'Enter a product name.'; ok = false; }
     else document.getElementById('as-pid-hint').textContent = '';
     if (!qty || qty < 1) { document.getElementById('as-qty-hint').textContent  = 'Quantity must be at least 1.'; ok = false; }
     else document.getElementById('as-qty-hint').textContent = '';
@@ -171,9 +178,11 @@ function bindAddStock() {
     btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Adding…';
     try {
       await api.post('/stock/add/stock', {
-        product_id: pid, quantity: qty, cost_price: cost,
+        product_name: productName,
+        quantity: qty,
+        cost_price: cost,
         expiry_date: expiry,
-      });
+    });
       sucEl.classList.add('show');
       e.target.reset();
       await loadStock();
