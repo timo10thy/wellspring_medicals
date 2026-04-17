@@ -313,3 +313,51 @@ def search_available_products(
     if product_name:
         query = query.filter(Products.name.ilike(f"%{product_name}%"))
     return query.all()
+
+@router.get("/stocks/expiry-alerts", response_model=list[StockExpireAlert], status_code=status.HTTP_200_OK)
+def expiration_alert(db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
+
+    today = date.today()
+    expiry_window = today + timedelta(days=180)
+
+    stocks = (
+        db.query(Stocks)
+        .join(Stocks.product)
+        .options(joinedload(Stocks.product))
+        .filter(
+            Stocks.expiry_date != None,
+            Stocks.expiry_date <= expiry_window,
+            Stocks.quantity > 0  # ← ONLY show stocks with remaining quantity
+        )
+        .all()
+    )
+
+    def get_expiry_action(days: int) -> str:
+        if 90 <= days <= 180:
+            return "Warning: product life span is getting low"
+        elif 45 <= days <= 89:
+            return "Warning: Product should be discounted"
+        elif 30 <= days <= 44:
+            return "Critical level: Product should be returned"
+        elif 1 <= days <= 29:
+            return "Very critical: Product will soon expire"
+        else:
+            return "Expired product - remove immediately"
+
+    alerts = []
+    for stock in stocks:
+        remaining_days = (stock.expiry_date - today).days
+        alerts.append(
+            StockExpireAlert(
+                stock_id=stock.id,
+                product_id=stock.product_id,
+                product_name=stock.product.name,
+                expire_date=stock.expiry_date,
+                days_to_expire=remaining_days,
+                quantity_affected=str(stock.quantity),
+                stock_value_cost=float(stock.quantity * stock.cost_price),
+                recommended_action=get_expiry_action(remaining_days)
+            )
+        )
+
+    return alerts

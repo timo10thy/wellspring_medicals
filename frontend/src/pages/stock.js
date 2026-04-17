@@ -1,9 +1,3 @@
-// ── Stock Page (Admin only) ───────────────────────────────────────────────────
-// POST /stock/create
-// POST /stock/add/stock
-// GET  /stock/stock/total
-// GET  /stock/total/search?product_name=
-
 import { api }                                     from '../js/api.js';
 import { renderSidebar, renderTopbar, bindSidebar,
          openModal, closeModal, bindModalClose,
@@ -24,9 +18,7 @@ export function renderStock() {
             <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;">${icons.search}</span>
             <input id="stock-search" class="field-input" type="text" placeholder="Search by product name…" style="padding-left:36px;"/>
           </div>
-          <div style="display:flex;gap:8px;">
-            <button id="add-stock-btn" class="btn btn-primary">${icons.plus} Add Stock</button>
-          </div>
+          <button id="add-stock-btn" class="btn btn-primary">${icons.plus} Add Stock</button>
         </div>
 
         <!-- Total stock table -->
@@ -55,20 +47,17 @@ export function renderStock() {
         <h2 style="font-family:var(--font-head);font-size:20px;color:var(--text)">Add Stock</h2>
         <button data-close-modal class="btn btn-ghost" style="padding:6px 10px;">${icons.x}</button>
       </div>
-      <div id="as-error" class="banner banner-error"><span></span></div>
+      <div id="as-error"   class="banner banner-error"><span></span></div>
       <div id="as-success" class="banner banner-success"><span>Stock added successfully.</span></div>
 
       <form id="add-stock-form" novalidate style="display:flex;flex-direction:column;gap:14px;">
-        // <div>
-        //   <label class="field-label">Product ID</label>
-        //   <input class="field-input" id="as-product-id" type="number" placeholder="Enter product ID" min="1"/>
-        //   <p class="field-hint hint-error" id="as-pid-hint"></p>
-        // </div>
+
         <div>
-            <label class="field-label">Product Name</label>
-            <input class="field-input" id="as-product-name" type="text" placeholder="e.g. Paracetamol 500mg"/>
-            <p class="field-hint hint-error" id="as-pid-hint"></p>
+          <label class="field-label">Product Name</label>
+          <input class="field-input" id="as-product-name" type="text" placeholder="e.g. Paracetamol 500mg"/>
+          <p class="field-hint hint-error" id="as-pid-hint"></p>
         </div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
             <label class="field-label">Quantity</label>
@@ -81,10 +70,12 @@ export function renderStock() {
             <p class="field-hint hint-error" id="as-cost-hint"></p>
           </div>
         </div>
+
         <div>
           <label class="field-label">Expiry Date <span style="color:var(--muted);font-weight:400">(optional)</span></label>
           <input class="field-input" id="as-expiry" type="date"/>
         </div>
+
         <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
           <button type="button" data-close-modal class="btn btn-ghost">Cancel</button>
           <button type="submit" id="as-submit" class="btn btn-primary">Add Stock</button>
@@ -102,6 +93,9 @@ export async function initStock() {
     document.getElementById('add-stock-form')?.reset();
     document.getElementById('as-error').classList.remove('show');
     document.getElementById('as-success').classList.remove('show');
+    ['as-pid-hint','as-qty-hint','as-cost-hint'].forEach(id => {
+      document.getElementById(id).textContent = '';
+    });
     openModal('add-stock-modal');
   });
 
@@ -110,13 +104,12 @@ export async function initStock() {
   bindAddStock();
 }
 
-let allStock = [];
-
 async function loadStock(query = '') {
   try {
-    const url  = query ? `/stock/total/search?product_name=${encodeURIComponent(query)}` : '/stock/stock/total';
+    const url  = query
+      ? `/stock/total/search?product_name=${encodeURIComponent(query)}`
+      : '/stock/stock/total';
     const data = await api.get(url);
-    allStock   = data;
     renderTable(data);
   } catch (err) {
     document.getElementById('stock-tbody').innerHTML = tableEmptyRow(4, err.message);
@@ -159,39 +152,49 @@ function bindAddStock() {
     errEl.classList.remove('show');
     sucEl.classList.remove('show');
 
-    // const pid    = parseInt(document.getElementById('as-product-id').value);
     const productName = document.getElementById('as-product-name').value.trim();
-    const qty    = parseInt(document.getElementById('as-qty').value);
-    const cost   = parseFloat(document.getElementById('as-cost').value);
-    const expiry = document.getElementById('as-expiry').value || null;
+    const qty         = parseInt(document.getElementById('as-qty').value);
+    const cost        = parseFloat(document.getElementById('as-cost').value);
+    const expiry      = document.getElementById('as-expiry').value || null;
 
     let ok = true;
-    // if (!pid || pid < 1) { document.getElementById('as-pid-hint').textContent  = 'Enter a valid product ID.'; ok = false; }
-    if (!productName) { document.getElementById('as-pid-hint').textContent = 'Enter a product name.'; ok = false; }
-    else document.getElementById('as-pid-hint').textContent = '';
-    if (!qty || qty < 1) { document.getElementById('as-qty-hint').textContent  = 'Quantity must be at least 1.'; ok = false; }
-    else document.getElementById('as-qty-hint').textContent = '';
-    if (!cost || cost <= 0) { document.getElementById('as-cost-hint').textContent = 'Enter a valid cost price.'; ok = false; }
-    else document.getElementById('as-cost-hint').textContent = '';
+    if (!productName) {
+      document.getElementById('as-pid-hint').textContent = 'Enter a product name.'; ok = false;
+    } else document.getElementById('as-pid-hint').textContent = '';
+
+    if (!qty || qty < 1) {
+      document.getElementById('as-qty-hint').textContent = 'Quantity must be at least 1.'; ok = false;
+    } else document.getElementById('as-qty-hint').textContent = '';
+
+    if (!cost || cost <= 0) {
+      document.getElementById('as-cost-hint').textContent = 'Enter a valid cost price.'; ok = false;
+    } else document.getElementById('as-cost-hint').textContent = '';
+
     if (!ok) return;
 
-    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Adding…';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Adding…';
+
     try {
       await api.post('/stock/add/stock', {
         product_name: productName,
-        quantity: qty,
-        cost_price: cost,
-        expiry_date: expiry,
-    });
+        quantity:     qty,
+        cost_price:   cost,
+        expiry_date:  expiry,
+      });
       sucEl.classList.add('show');
       e.target.reset();
       await loadStock();
-      setTimeout(() => { sucEl.classList.remove('show'); closeModal('add-stock-modal'); }, 1500);
+      setTimeout(() => {
+        sucEl.classList.remove('show');
+        closeModal('add-stock-modal');
+      }, 1500);
     } catch (err) {
       errEl.querySelector('span').textContent = err.message;
       errEl.classList.add('show');
     } finally {
-      btn.disabled = false; btn.innerHTML = 'Add Stock';
+      btn.disabled = false;
+      btn.innerHTML = 'Add Stock';
     }
   });
 }
