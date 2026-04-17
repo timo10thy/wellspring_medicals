@@ -7,6 +7,8 @@ from app.routes.admin import router as admin
 from app.routes.product import router as products
 from app.routes.stock import router as stock
 from app.routes.sales import router as sale
+from app.routes.expenses import router as expenses
+from app.routes.purchase_receipt import router as purchase_receipts
 from app.routes.basemodel import engine
 from app.models.base import Base
 import logging
@@ -43,3 +45,5 @@ app.include_router(admin)
 app.include_router(products)
 app.include_router(stock)
 app.include_router(sale)
+app.include_router(expenses)
+app.include_router(purchase_receipts)

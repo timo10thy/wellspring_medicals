@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, status, HTTPException, Query
 from sqlalchemy.orm import Session,joinedload
 from sqlalchemy import func
 from app.models.users import User
+from sqlalchemy import case
 from typing import Annotated
 from app.schema.stock_schema import StockCreate,StockResponse,StockConsumptionReport,TotalProductStock,StockExpireAlert
 from app.routes.basemodel import get_db
@@ -67,6 +68,21 @@ def stock_create(stock_data: StockCreate,db: Session = Depends(get_db),current_a
         )
 
 
+
+@router.get("/by-product/{product_id}", response_model=StockResponse, status_code=status.HTTP_200_OK)
+def get_stock_by_product(product_id: int, db: Session = Depends(get_db), current_user: User = Depends(AuthMiddleware)):
+    stock = db.query(Stocks).filter(
+        Stocks.product_id == product_id,
+        Stocks.quantity > 0
+    ).order_by(
+        case((Stocks.expiry_date == None, 1), else_=0),
+        Stocks.expiry_date.asc()
+    ).first()
+
+    if not stock:
+        raise HTTPException(status_code=404, detail="No available stock for this product")
+
+    return stock
 @router.get("/{stock_id}/consumption",response_model=StockConsumptionReport,status_code=status.HTTP_200_OK)
 def check_consumption(stock_id: int,db: Session = Depends(get_db),current_admin: User = Depends(admin_validation)):
     stock = db.query(Stocks).filter(Stocks.id == stock_id).first()
@@ -113,37 +129,36 @@ def new_stock(
     db: Session = Depends(get_db),
     current_admin: User = Depends(admin_validation)
 ):
-    
-    product = db.query(Products).filter(Products.id == stock_data.product_id).first()
+    # Find product by name (case-insensitive)
+    product = db.query(Products).filter(
+        Products.name.ilike(stock_data.product_name)
+    ).first()
     if not product:
-        raise HTTPException(status_code=404, detail="Product does not exist")
+        raise HTTPException(status_code=404, detail=f"Product '{stock_data.product_name}' not found")
 
-    
     existing_stock = db.query(Stocks).filter(
-        Stocks.product_id == stock_data.product_id,
+        Stocks.product_id == product.id,
         Stocks.cost_price == stock_data.cost_price,
         Stocks.expiry_date == stock_data.expiry_date
     ).first()
 
     if existing_stock:
-        
         existing_stock.quantity += stock_data.quantity
         db.add(existing_stock)
         db.commit()
         db.refresh(existing_stock)
         return existing_stock
     else:
-        new_stock = Stocks(
-            product_id=stock_data.product_id,
+        new_stock_entry = Stocks(
+            product_id=product.id,
             quantity=stock_data.quantity,
             cost_price=stock_data.cost_price,
             expiry_date=stock_data.expiry_date
         )
-        db.add(new_stock)
+        db.add(new_stock_entry)
         db.commit()
-        db.refresh(new_stock)
-        return new_stock
-
+        db.refresh(new_stock_entry)
+        return new_stock_entry
 def get_total_stock_quantity(product_id: int, db: Session):
     all_stocks = db.query(Stocks).filter(Stocks.product_id == product_id).all()
     return sum(stock.quantity for stock in all_stocks)
@@ -275,17 +290,7 @@ def expiration_alert(db: Session = Depends(get_db),current_admin: User = Depends
 
     return alerts
 
-@router.get("/by-product/{product_id}", response_model=StockResponse, status_code=status.HTTP_200_OK)
-def get_stock_by_product(product_id: int, db: Session = Depends(get_db), current_user: User = Depends(AuthMiddleware)):
-    stock = db.query(Stocks).filter(
-        Stocks.product_id == product_id,
-        Stocks.quantity > 0
-    ).order_by(Stocks.expiry_date.asc().nullslast()).first()
 
-    if not stock:
-        raise HTTPException(status_code=404, detail="No available stock for this product")
-
-    return stock
 
 
 @router.get("/search/available", response_model=list[TotalProductStock], status_code=status.HTTP_200_OK)

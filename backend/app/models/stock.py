@@ -17,4 +17,4 @@ class Stocks(Base):
     )
     sales = relationship("Sales",back_populates="stock",cascade="all, delete")
     product = relationship("Products", back_populates="stocks")
-    sales = relationship("Sales", back_populates="stock", cascade="all, delete")
+   

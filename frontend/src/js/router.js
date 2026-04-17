@@ -9,27 +9,30 @@ import { renderSales,      initSales }      from '../pages/sales.js';
 import { renderReports,    initReports }    from '../pages/reports.js';
 import { renderProfile,    initProfile }    from '../pages/profile.js';
 import { renderAdmin,      initAdmin }      from '../pages/admin.js';
+import { renderExpenses,   initExpenses }   from '../pages/expenses.js';
+import { renderPurchases,  initPurchases }  from '../pages/purchases.js';
 
 const app = document.getElementById('app');
 
 const PUBLIC_PAGES = ['home', 'login', 'register', 'admin-setup'];
-const ADMIN_PAGES  = ['products', 'stock', 'reports'];
+const ADMIN_PAGES  = ['products', 'stock', 'reports', 'expenses', 'purchases'];
 
 const PAGES = {
-  home:          { render: renderHome                              },
-  login:         { render: renderLogin,     init: initLogin       },
-  register:      { render: renderRegister,  init: initRegister    },
-  dashboard:     { render: renderDashboard, init: initDashboard   },
-  products:      { render: renderProducts,  init: initProducts    },
-  stock:         { render: renderStock,     init: initStock       },
-  sales:         { render: renderSales,     init: initSales       },
-  reports:       { render: renderReports,   init: initReports     },
-  profile:       { render: renderProfile,   init: initProfile     },
-  'admin-setup': { render: renderAdmin,     init: initAdmin       },
+  home:          { render: renderHome                                },
+  login:         { render: renderLogin,      init: initLogin        },
+  register:      { render: renderRegister,   init: initRegister     },
+  dashboard:     { render: renderDashboard,  init: initDashboard    },
+  products:      { render: renderProducts,   init: initProducts     },
+  stock:         { render: renderStock,      init: initStock        },
+  sales:         { render: renderSales,      init: initSales        },
+  reports:       { render: renderReports,    init: initReports      },
+  profile:       { render: renderProfile,    init: initProfile      },
+  'admin-setup': { render: renderAdmin,      init: initAdmin        },
+  expenses:      { render: renderExpenses,   init: initExpenses     },
+  purchases:     { render: renderPurchases,  init: initPurchases    },
 };
 
 export function navigate(page, params = {}) {
-  // admin-setup is always accessible regardless of login state
   if (page === 'admin-setup') {
     _render(page, params); return;
   }
