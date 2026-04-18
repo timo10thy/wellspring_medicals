@@ -1,120 +1,203 @@
-# Pharma Inventory System
+# PharmaIMS — Wellspring Medics Inventory Management System
 
-A full-stack Pharmacy Inventory Management System with React frontend and FastAPI backend.
+A full-stack pharmacy inventory and sales management system built for Wellspring Medics. It handles daily transactions, stock tracking, sales recording, expense management, purchase receipts, and business analytics — all in one place.
+
+---
+
+## Tech Stack
+
+| Layer     | Technology                              |
+|-----------|-----------------------------------------|
+| Backend   | FastAPI (Python), SQLAlchemy, MySQL     |
+| Frontend  | Vanilla JS (ES Modules), Tailwind CSS   |
+| Server    | Nginx (reverse proxy + static files)    |
+| Database  | MySQL 8.0 via Docker                   |
+| Container | Docker + Docker Compose                 |
+
+---
+
+## Features
+
+### 🔐 Authentication & Roles
+- JWT-based authentication
+- Two roles: **ADMIN** and **USER**
+- Admin-only setup via secure token
+- Protected routes per role on both frontend and backend
+
+### 📦 Products
+- Create, update, deactivate products
+- Each product has a name, price, description, and active status
+
+### 🗃️ Stock Management
+- Add stock by product name (no ID required)
+- FEFO (First Expiry, First Out) stock selection on sales
+- Total stock view per product
+- Low stock and out-of-stock indicators
+- Stock consumption analysis (avg daily usage, days remaining)
+
+### 💊 Expiry Alerts
+- Alerts for stock expiring within 180 days
+- Colour-coded urgency levels (warning → critical → expired)
+- Automatically excludes fully sold stock from alerts
+
+### 🧾 Sales
+- Cart-style multi-item sales (one receipt, multiple products)
+- Search products by name with live availability
+- Out-of-stock products shown but blocked from selection
+- Selling price validation (cannot exceed product price without admin)
+- Receipt lookup by sale ID
+
+### 💰 Expenses
+- Record operating expenses by category (GOODS_PURCHASE, OPERATING_EXPENSE, TRANSPORT, RENT, OTHER)
+- Edit and delete expenses
+- Monthly expense tracker with investment advice based on profit tier
+
+### 🛒 Purchase Receipts
+- Record supplier purchases with multiple line items
+- Auto-generated receipt numbers
+- Supplier search
+- Tracks quantity purchased, unit cost, expiry date, restock level per item
+
+### 📊 Reports
+- **Daily Summary** — sales, operating expenses (excludes goods purchase), profit
+- **Weekly Summary** — sales, all expenses, purchases/restock, top products
+- **Monthly Summary** — same as weekly with broader date range
+- **Yearly Summary** — full year overview
+- **Top Selling Products** — ranked by units sold for any period
+- **Expense Breakdown** — per category with visual progress bars
+- **Expiry Alerts** — full table with stock value and recommended action
+- **Consumption Report** — per stock ID with consumed % bar
+
+### 🏠 Dashboard Analytics
+- Sales today (amount + transaction count)
+- Low stock and out-of-stock counts
+- Monthly profit estimate (revenue − expenses − purchases)
+- Low stock alerts table
+- Recent 10 sales
+
+---
 
 ## Project Structure
 
 ```
 pharma-inventory-system/
-├── backend/          # FastAPI backend (copied from Spring project)
-├── frontend/         # React frontend with TailwindCSS
+├── backend/
+│   ├── app/
+│   │   ├── auth/           # JWT helpers
+│   │   ├── middlewares/    # Auth + Admin guards
+│   │   ├── models/         # SQLAlchemy models
+│   │   ├── routes/         # API endpoints
+│   │   └── schema/         # Pydantic schemas
+│   ├── Dockerfile
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── js/             # api.js, auth.js, router.js, ui.js, main.js
+│   │   ├── pages/          # One file per page
+│   │   └── styles/         # CSS theme
+│   ├── nginx.conf
+│   └── Dockerfile
 ├── docker-compose.yml
 └── README.md
 ```
 
-## Features
+---
 
-### Backend (FastAPI)
-- Product management
-- Stock tracking with expiry monitoring
-- Sales management
-- Role-based authentication (Admin/User)
-- Expiry alerts (180-day window)
-- PostgreSQL database with Alembic migrations
+## Getting Started
 
-### Frontend (Vanilla JavaScript)
-- Modern UI with TailwindCSS
-- Admin dashboard for inventory management
-- User interface for sales operations
-- Authentication pages
-- Real-time expiry alerts
-- Responsive design
-- **No React framework - pure vanilla JS**
+### Prerequisites
+- Docker
+- Docker Compose
 
-## Port Configuration (Updated to avoid conflicts)
-
-- **Frontend**: http://localhost:3001
-- **Backend API**: http://localhost:8002
-- **Database**: localhost:3316
-- **phpMyAdmin**: http://localhost:8081
-
-## Quick Start
-
+### 1. Clone the repository
 ```bash
-# Clone and start the full stack
-git clone <repository-url>
-cd pharma-inventory-system
-docker-compose up --build
+git clone https://github.com/timo10thy/wellspring_medicals.git
+cd wellspring_medicals
 ```
 
-## Development
-
-### Backend
+### 2. Start all services
 ```bash
-cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+docker compose up --build -d
 ```
 
-### Frontend (Vanilla JS + TailwindCSS)
+### 3. Create the first admin account
+
+The admin account is created once via a protected endpoint. Use the setup token defined in `docker-compose.yml` under `ADMIN_SETUP_TOKEN`.
+
 ```bash
-cd frontend
-npm install
-npm run dev  # This runs both build and serve
+curl -X POST "http://localhost:8002/admin/create?setup_token=pharma-admin-2024-xK9mP3" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Admin Name",
+    "email": "admin@wellspring.com",
+    "user_name": "admin",
+    "password": "yourpassword"
+  }'
 ```
 
-Frontend will be available at http://localhost:3001
+### 4. Access the app
 
-### TailwindCSS Build Commands
+| Service      | URL                          |
+|--------------|------------------------------|
+| Frontend     | http://localhost:3001        |
+| Backend API  | http://localhost:8002        |
+| Swagger Docs | http://localhost:8002/docs   |
+| phpMyAdmin   | http://localhost:8081        |
+
+---
+
+## Environment Variables
+
+Configured in `docker-compose.yml` under the `backend` service:
+
+| Variable            | Description                        |
+|---------------------|------------------------------------|
+| `DB_HOST`           | MySQL host (use `db` in Docker)    |
+| `DB_DATABASE`       | Database name                      |
+| `DB_USER`           | Database user                      |
+| `DB_PASSWORD`       | Database password                  |
+| `JWT_SECRET_KEY`    | Secret key for signing JWT tokens  |
+| `JWT_ALGORITHM`     | Algorithm (default: HS256)         |
+| `JWT_EXPIRATION_KEY`| Token expiry in minutes            |
+| `ADMIN_SETUP_TOKEN` | One-time token for admin creation  |
+
+---
+
+## API Overview
+
+| Prefix               | Description                   |
+|----------------------|-------------------------------|
+| `/auth`              | Login, register               |
+| `/admin`             | Admin setup, admin info       |
+| `/product`           | Product CRUD                  |
+| `/stock`             | Stock management + alerts     |
+| `/sales`             | Sales creation + receipts     |
+| `/expenses`          | Expense tracking              |
+| `/purchase-receipts` | Supplier purchase records     |
+| `/dashboard`         | Analytics summary             |
+| `/reports`           | Period-based business reports |
+
+Full interactive documentation available at `/docs` (Swagger UI).
+
+---
+
+## Rebuilding After Changes
+
 ```bash
-npm run build      # Watch mode for development
-npm run build:prod # Production build (minified)
-npm run serve      # Serve built files
+# Full rebuild (clears Docker cache)
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+
+# Frontend only
+docker compose build --no-cache frontend && docker compose up -d frontend
+
+# Backend only (no rebuild needed for Python changes with volume mount)
+docker compose restart backend
 ```
 
-## API Documentation
-http://localhost:8002/docs
+---
 
-## Frontend Application
-http://localhost:3001
+## License
 
-## Database Management
-Access phpMyAdmin at: http://localhost:8081
-- Server: db
-- Username: pharma_user
-- Password: pharma_password
-
-## Technology Stack
-
-### Backend
-- **FastAPI** - Modern Python web framework
-- **SQLAlchemy** - ORM
-- **MySQL** - Database
-- **JWT** - Authentication
-- **Alembic** - Database migrations
-
-### Frontend
-- **Vanilla JavaScript ES6+** - No framework dependency
-- **TailwindCSS** - Utility-first CSS framework
-- **TailwindCSS CLI** - Build system
-- **Python HTTP Server** - Development server
-
-### DevOps
-- **Docker & Docker Compose** - Containerization
-- **MySQL 8.0** - Database
-- **phpMyAdmin** - Database management
-
-## Authentication Flow
-
-1. Users login via the vanilla JS frontend
-2. JWT token is stored in localStorage
-3. All API calls include the Bearer token
-4. Role-based access control (Admin vs User)
-
-## Project Notes
-
-- **No React dependency** - Pure vanilla JavaScript implementation
-- **TailwindCSS CLI** replaces create-react-app build system
-- **Custom routing** implemented in JavaScript
-- **Port conflicts resolved** - Uses non-conflicting ports
-- **phpMyAdmin included** for easy database management
+Private — Wellspring Medics internal system.
