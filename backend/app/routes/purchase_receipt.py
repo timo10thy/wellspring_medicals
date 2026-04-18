@@ -20,7 +20,7 @@ from app.schema.purchase_receipt_schema import (
 import logging
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix='/purchase_receipts', tags=['Purchase Receipts'])
+router = APIRouter(prefix='/purchase-receipts', tags=['Purchase Receipts'])
 
 
 def generate_receipt_number() -> str:

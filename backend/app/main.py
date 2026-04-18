@@ -9,6 +9,8 @@ from app.routes.stock import router as stock
 from app.routes.sales import router as sale
 from app.routes.expenses import router as expenses
 from app.routes.purchase_receipt import router as purchase_receipts
+from app.routes.dashboard import router as dashboard
+from app.routes.reports import router as reports
 from app.routes.basemodel import engine
 from app.models.base import Base
 import logging
@@ -25,9 +27,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3001",  # frontend in Docker
+        "http://localhost:3001",
         "http://localhost:3000",
-        "http://localhost:5500",  # Live Server
+        "http://localhost:5500",
         "http://127.0.0.1:5500",
     ],
     allow_credentials=True,
@@ -47,3 +49,5 @@ app.include_router(stock)
 app.include_router(sale)
 app.include_router(expenses)
 app.include_router(purchase_receipts)
+app.include_router(dashboard)
+app.include_router(reports)
