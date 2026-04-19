@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-pymysql
+psycopg2-binary
 SQLAlchemy
 python-dotenv
 bcrypt

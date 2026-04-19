@@ -1,4 +1,4 @@
-FROM python:alpine3.21
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -7,8 +7,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
 
-RUN addgroup -g 1001 -S appuser && \
-    adduser -S appuser -u 1001 && \
+RUN groupadd -g 1001 appuser && \
+    useradd -u 1001 -g appuser -s /bin/sh appuser && \
     chown -R appuser:appuser /app
 
 USER appuser

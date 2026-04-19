@@ -20,3 +20,5 @@ backend/.env
 # OS
 .DS_Store
 *.log
+.env.prod
+.env
