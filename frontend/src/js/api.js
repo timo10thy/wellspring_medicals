@@ -2,7 +2,9 @@ import { auth }     from './auth.js';
 import { navigate } from './router.js';
 
 const IS_DEV = location.port === '5500';
-const BASE   = IS_DEV ? 'http://localhost:8002' : '/api';
+const BASE   = IS_DEV
+  ? 'http://localhost:8002'
+  : 'https://pharma-backend-fe2h.onrender.com';
 
 async function request(method, path, body = null, requiresAuth = true) {
   const headers = requiresAuth
