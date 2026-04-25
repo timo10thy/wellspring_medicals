@@ -49,11 +49,11 @@ def dashboard_analytics(
     )
     recent_sales = [
         {
-            "sale_id":      sale.id,
-            "product_name": name,
+            "sale_id":       sale.id,
+            "product_name":  name,
             "quantity_sold": sale.quantity_sold,
-            "total_amount": float(sale.total_amount),
-            "created_at":   sale.created_at.isoformat(),
+            "total_amount":  float(sale.total_amount),
+            "created_at":    sale.created_at.isoformat(),
         }
         for sale, name in recent_sales_rows
     ]
@@ -95,13 +95,17 @@ def dashboard_analytics(
         .all()
     )
 
-    low_stock  = [s for s in stock_totals if 0 < s.total_quantity < 10]
-    out_stock  = [s for s in stock_totals if s.total_quantity <= 0]
+    low_stock = [s for s in stock_totals if 0 < s.total_quantity < 10]
+    out_stock = [s for s in stock_totals if s.total_quantity <= 0]
 
     low_stock_alerts = [
         {"product_id": s.product_id, "product_name": s.product_name, "total_quantity": s.total_quantity}
         for s in low_stock
     ]
+
+    # ── Total stock level (all products combined) ─────────────────────────────
+    total_stock_result = db.query(func.sum(Stocks.quantity)).scalar()
+    total_stock = int(total_stock_result or 0)
 
     return {
         "sales_today":        sales_today,
@@ -112,6 +116,59 @@ def dashboard_analytics(
         "profit_estimate":    profit_estimate,
         "low_stock_count":    len(low_stock),
         "out_of_stock_count": len(out_stock),
+        "total_stock":        total_stock,
         "low_stock_alerts":   low_stock_alerts,
         "recent_sales":       recent_sales,
     }
+
+
+@router.get('/product-search', status_code=status.HTTP_200_OK)
+def product_search(
+    name: str,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(admin_validation)
+):
+    matched = (
+        db.query(Products)
+        .filter(Products.name.ilike(f'%{name}%'))
+        .all()
+    )
+
+    results = []
+    for product in matched:
+        # Current available quantity across all stock entries
+        available_result = (
+            db.query(func.sum(Stocks.quantity))
+            .filter(Stocks.product_id == product.id)
+            .scalar()
+        )
+        available = int(available_result or 0)
+
+        # Total quantity sold for this product
+        sold_result = (
+            db.query(func.sum(Sales.quantity_sold))
+            .join(Stocks, Sales.stock_id == Stocks.id)
+            .filter(Stocks.product_id == product.id)
+            .scalar()
+        )
+        quantity_sold = int(sold_result or 0)
+
+        # Initial quantity = available now + what was sold
+        initial_quantity = available + quantity_sold
+
+        stock_level = (
+            "Out of Stock" if available <= 0
+            else "Low Stock" if available < 10
+            else "In Stock"
+        )
+
+        results.append({
+            "product_id":       product.id,
+            "product_name":     product.name,
+            "initial_quantity": initial_quantity,
+            "quantity_sold":    quantity_sold,
+            "available":        available,
+            "stock_level":      stock_level,
+        })
+
+    return results

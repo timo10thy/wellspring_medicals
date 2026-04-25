@@ -23,7 +23,7 @@ export function renderDashboard() {
 
         <!-- Stat cards -->
         <div id="stats-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:28px;">
-          ${[1,2,3,4].map(() => `
+          ${[1,2,3,4,5].map(() => `
             <div class="stat-card">
               <div class="skeleton" style="height:32px;width:80px;margin-bottom:8px;"></div>
               <div class="skeleton" style="height:12px;width:120px;"></div>
@@ -45,6 +45,21 @@ export function renderDashboard() {
             <div id="purchases-card" style="font-family:var(--font-head);font-size:28px;color:var(--text);">
               <div class="skeleton" style="height:32px;width:140px;"></div>
             </div>
+          </div>
+        </div>
+
+        <!-- Product Search -->
+        <div class="card" style="overflow:hidden;margin-bottom:20px;">
+          <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
+            <span style="font-size:13px;font-weight:500;color:var(--text)">🔍 Product Stock Lookup</span>
+          </div>
+          <div style="padding:16px 18px;">
+            <div style="display:flex;gap:10px;margin-bottom:16px;">
+              <input class="field-input" id="product-search-input" type="text"
+                placeholder="Search product name…" style="flex:1;"/>
+              <button id="product-search-btn" class="btn btn-primary" style="white-space:nowrap;">Search</button>
+            </div>
+            <div id="product-search-results"></div>
           </div>
         </div>
 
@@ -110,6 +125,7 @@ export async function initDashboard() {
       loadAnalytics(),
       loadExpiry(),
     ]);
+    initProductSearch();
   } else {
     loadUserStats();
     loadRecentSalesBasic();
@@ -125,6 +141,7 @@ async function loadAnalytics() {
     document.getElementById('stats-row').innerHTML = `
       ${statCard('Sales Today',     `₦${fmt(d.sales_today)}`,        '💰', 'var(--accent)')}
       ${statCard('Transactions',    d.sales_today_count,              '🧾', 'var(--info)')}
+      ${statCard('Total Stock',     d.total_stock,                    '📦', 'var(--accent-lt)')}
       ${statCard('Low Stock Items', d.low_stock_count,                '⚠️', 'var(--warn)')}
       ${statCard('Out of Stock',    d.out_of_stock_count,             '🚨', 'var(--danger)')}`;
 
@@ -171,7 +188,7 @@ async function loadAnalytics() {
   }
 }
 
-// ── Expiry alerts (unchanged) ─────────────────────────────────────────────────
+// ── Expiry alerts ─────────────────────────────────────────────────────────────
 async function loadExpiry() {
   try {
     const alerts = await api.get('/stock/stocks/expiry-alerts');
@@ -195,6 +212,69 @@ async function loadExpiry() {
     const tbody = document.getElementById('expiry-alerts');
     if (tbody) tbody.innerHTML = tableEmptyRow(3, 'Could not load alerts.');
   }
+}
+
+// ── Product Search ────────────────────────────────────────────────────────────
+function initProductSearch() {
+  const input  = document.getElementById('product-search-input');
+  const btn    = document.getElementById('product-search-btn');
+  const result = document.getElementById('product-search-results');
+  if (!input || !btn || !result) return;
+
+  async function doSearch() {
+    const name = input.value.trim();
+    if (!name) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    result.innerHTML = `<p style="font-size:13px;color:var(--muted);">Searching…</p>`;
+
+    try {
+      const data = await api.get(`/dashboard/product-search?name=${encodeURIComponent(name)}`);
+
+      if (!data.length) {
+        result.innerHTML = `<p style="font-size:13px;color:var(--muted);">No products found for "<strong>${name}</strong>".</p>`;
+        return;
+      }
+
+      result.innerHTML = `
+        <div style="overflow-x:auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Initial Qty</th>
+                <th>Qty Sold</th>
+                <th>Available</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.map(p => {
+                const badge = p.stock_level === 'In Stock'  ? 'badge-green'
+                            : p.stock_level === 'Low Stock' ? 'badge-yellow'
+                            : 'badge-red';
+                return `<tr>
+                  <td style="font-weight:500">${p.product_name}</td>
+                  <td>${p.initial_quantity}</td>
+                  <td style="color:#f87171">${p.quantity_sold}</td>
+                  <td style="color:var(--accent-lt);font-weight:600">${p.available}</td>
+                  <td><span class="badge ${badge}">${p.stock_level}</span></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    } catch (err) {
+      result.innerHTML = `<p style="font-size:13px;color:#f87171;">Error: ${err.message}</p>`;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Search';
+    }
+  }
+
+  btn.addEventListener('click', doSearch);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
 }
 
 // ── User view (non-admin) ─────────────────────────────────────────────────────
