@@ -172,3 +172,63 @@ def product_search(
         })
 
     return results
+# stock evaluation
+
+@router.get('/stock-valuation', status_code=status.HTTP_200_OK)
+def stock_valuation(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(admin_validation)
+):
+    # Join stocks with products to get all needed fields
+    rows = (
+        db.query(
+            Products.id.label('product_id'),
+            Products.name.label('product_name'),
+            Products.price.label('selling_price'),
+            func.sum(Stocks.quantity).label('total_quantity'),
+            func.sum(Stocks.quantity * Stocks.cost_price).label('total_cost_value'),
+            func.sum(Stocks.quantity * Products.price).label('total_selling_value'),
+        )
+        .join(Stocks, Stocks.product_id == Products.id)
+        .filter(Stocks.quantity > 0)
+        .group_by(Products.id, Products.name, Products.price)
+        .order_by(func.sum(Stocks.quantity * Products.price).desc())
+        .all()
+    )
+
+    products = []
+    grand_total_units        = 0
+    grand_total_cost_value   = 0.0
+    grand_total_selling_value = 0.0
+
+    for row in rows:
+        total_qty      = int(row.total_quantity or 0)
+        cost_val       = float(row.total_cost_value or 0)
+        selling_val    = float(row.total_selling_value or 0)
+        profit_val     = selling_val - cost_val
+
+        grand_total_units         += total_qty
+        grand_total_cost_value    += cost_val
+        grand_total_selling_value += selling_val
+
+        products.append({
+            "product_id":          row.product_id,
+            "product_name":        row.product_name,
+            "selling_price":       float(row.selling_price),
+            "total_quantity":      total_qty,
+            "total_cost_value":    cost_val,
+            "total_selling_value": selling_val,
+            "potential_profit":    profit_val,
+        })
+
+    grand_potential_profit = grand_total_selling_value - grand_total_cost_value
+
+    return {
+        "summary": {
+            "total_units":         grand_total_units,
+            "total_cost_value":    grand_total_cost_value,
+            "total_selling_value": grand_total_selling_value,
+            "potential_profit":    grand_potential_profit,
+        },
+        "products": products,
+    }
