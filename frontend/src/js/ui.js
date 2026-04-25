@@ -136,29 +136,24 @@ export function bindSidebar() {
   const closeBtn     = document.getElementById('sidebar-close-btn');
 
   function openSidebar() {
-    sidebar.style.transform  = 'translateX(0)';
-    overlay.style.display    = 'block';
-    closeBtn.style.display   = 'flex';
+    sidebar.classList.add('open');
+    overlay.style.display = 'block';
+    closeBtn.style.display = 'flex';
   }
 
   function closeSidebar() {
-    sidebar.style.transform  = 'translateX(-100%)';
-    overlay.style.display    = 'none';
+    sidebar.classList.remove('open');
+    overlay.style.display = 'none';
+    closeBtn.style.display = 'none';
   }
 
-  // On desktop (>=768px) always show sidebar
   function handleResize() {
     if (window.innerWidth >= 768) {
-      sidebar.style.transform = 'translateX(0)';
-      sidebar.style.position  = 'relative';
-      sidebar.style.zIndex    = '1';
-      overlay.style.display   = 'none';
-      closeBtn.style.display  = 'none';
+      sidebar.classList.remove('open');
+      overlay.style.display  = 'none';
+      closeBtn.style.display = 'none';
       if (hamburgerBtn) hamburgerBtn.style.display = 'none';
     } else {
-      sidebar.style.position  = 'fixed';
-      sidebar.style.zIndex    = '100';
-      sidebar.style.transform = 'translateX(-100%)';
       if (hamburgerBtn) hamburgerBtn.style.display = 'flex';
     }
   }
@@ -170,20 +165,17 @@ export function bindSidebar() {
   closeBtn?.addEventListener('click', closeSidebar);
   overlay?.addEventListener('click', closeSidebar);
 
-  // Close sidebar on nav item click (mobile)
   document.querySelectorAll('.nav-item[data-nav]').forEach(el => {
     el.addEventListener('click', () => {
       if (window.innerWidth < 768) closeSidebar();
     });
   });
 
-  // Logout
   document.getElementById('logout-btn')?.addEventListener('click', () => {
     auth.logout();
     navigate('login');
   });
 }
-
 export function openModal(id)  { document.getElementById(id)?.classList.add('open'); }
 export function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
 export function bindModalClose(id) {
