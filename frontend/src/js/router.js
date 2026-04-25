@@ -11,29 +11,34 @@ import { renderProfile,    initProfile }    from '../pages/profile.js';
 import { renderAdmin,      initAdmin }      from '../pages/admin.js';
 import { renderExpenses,   initExpenses }   from '../pages/expenses.js';
 import { renderPurchases,  initPurchases }  from '../pages/purchases.js';
+import { renderAdminRegister, initAdminRegister } from '../pages/admin-register.js';
 
 const app = document.getElementById('app');
 
-const PUBLIC_PAGES = ['home', 'login', 'register', 'admin-setup'];
+const PUBLIC_PAGES = ['home', 'login', 'register', 'admin-setup', 'admin-register'];
 const ADMIN_PAGES  = ['products', 'stock', 'reports', 'expenses', 'purchases'];
 
 const PAGES = {
-  home:          { render: renderHome                                },
-  login:         { render: renderLogin,      init: initLogin        },
-  register:      { render: renderRegister,   init: initRegister     },
-  dashboard:     { render: renderDashboard,  init: initDashboard    },
-  products:      { render: renderProducts,   init: initProducts     },
-  stock:         { render: renderStock,      init: initStock        },
-  sales:         { render: renderSales,      init: initSales        },
-  reports:       { render: renderReports,    init: initReports      },
-  profile:       { render: renderProfile,    init: initProfile      },
-  'admin-setup': { render: renderAdmin,      init: initAdmin        },
-  expenses:      { render: renderExpenses,   init: initExpenses     },
-  purchases:     { render: renderPurchases,  init: initPurchases    },
+  home:             { render: renderHome                                        },
+  login:            { render: renderLogin,          init: initLogin             },
+  register:         { render: renderRegister,        init: initRegister         },
+  dashboard:        { render: renderDashboard,       init: initDashboard        },
+  products:         { render: renderProducts,        init: initProducts         },
+  stock:            { render: renderStock,           init: initStock            },
+  sales:            { render: renderSales,           init: initSales            },
+  reports:          { render: renderReports,         init: initReports          },
+  profile:          { render: renderProfile,         init: initProfile          },
+  'admin-setup':    { render: renderAdmin,           init: initAdmin            },
+  'admin-register': { render: renderAdminRegister,   init: initAdminRegister    },
+  expenses:         { render: renderExpenses,        init: initExpenses         },
+  purchases:        { render: renderPurchases,       init: initPurchases        },
 };
 
 export function navigate(page, params = {}) {
   if (page === 'admin-setup') {
+    _render(page, params); return;
+  }
+  if (page === 'admin-register') {
     _render(page, params); return;
   }
   if ((page === 'login' || page === 'register') && auth.isLoggedIn()) {
@@ -51,19 +56,15 @@ export function navigate(page, params = {}) {
 async function _render(page, params = {}) {
   const config = PAGES[page];
   if (!config) { _render('home'); return; }
-
   app.innerHTML = config.render(params);
   if (app.firstElementChild) app.firstElementChild.classList.add('page-enter');
-
   app.querySelectorAll('[data-nav]').forEach(el => {
     el.addEventListener('click', (e) => {
       e.preventDefault();
       navigate(el.getAttribute('data-nav'));
     });
   });
-
   history.pushState({ page }, '', `#${page}`);
-
   if (config.init) {
     try { await config.init(params); }
     catch (err) { console.error(`[PharmaIMS] Init error on "${page}":`, err); }
