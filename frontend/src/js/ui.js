@@ -18,6 +18,8 @@ export const icons = {
   receipt:  `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
   wallet:   `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 12h.01"/><path d="M2 10h20"/></svg>`,
   shopping: `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`,
+  hamburger:`<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>`,
+  close:    `<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
 };
 
 export function logoHTML() {
@@ -38,14 +40,14 @@ export function renderSidebar(activePage) {
   const isAdmin = auth.isAdmin();
 
   const navItems = [
-    { page: 'dashboard', icon: icons.grid,     label: 'Dashboard'          },
-    { page: 'sales',     icon: icons.cart,     label: 'Sales',    roles: ['ADMIN','USER'] },
-    { page: 'products',  icon: icons.box,      label: 'Products', roles: ['ADMIN'] },
-    { page: 'stock',     icon: icons.stack,    label: 'Stock',    roles: ['ADMIN'] },
-    { page: 'expenses',  icon: icons.wallet,   label: 'Expenses', roles: ['ADMIN'] },
-    { page: 'purchases', icon: icons.shopping, label: 'Purchases',roles: ['ADMIN'] },
-    { page: 'reports',   icon: icons.chart,    label: 'Reports',  roles: ['ADMIN'] },
-    { page: 'profile',   icon: icons.user,     label: 'Profile',  roles: ['ADMIN','USER'] },
+    { page: 'dashboard', icon: icons.grid,     label: 'Dashboard'                      },
+    { page: 'sales',     icon: icons.cart,     label: 'Sales',     roles: ['ADMIN','USER'] },
+    { page: 'products',  icon: icons.box,      label: 'Products',  roles: ['ADMIN']        },
+    { page: 'stock',     icon: icons.stack,    label: 'Stock',     roles: ['ADMIN']        },
+    { page: 'expenses',  icon: icons.wallet,   label: 'Expenses',  roles: ['ADMIN']        },
+    { page: 'purchases', icon: icons.shopping, label: 'Purchases', roles: ['ADMIN']        },
+    { page: 'reports',   icon: icons.chart,    label: 'Reports',   roles: ['ADMIN']        },
+    { page: 'profile',   icon: icons.user,     label: 'Profile',   roles: ['ADMIN','USER'] },
   ];
 
   const navHTML = navItems
@@ -56,9 +58,35 @@ export function renderSidebar(activePage) {
       </a>`).join('');
 
   return `
-    <aside class="sidebar" id="sidebar">
+    <!-- Mobile overlay backdrop -->
+    <div id="sidebar-overlay" style="
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.5);
+      z-index:99;
+    "></div>
+
+    <aside class="sidebar" id="sidebar" style="
+      position:fixed;
+      top:0; left:0; bottom:0;
+      z-index:100;
+      transform:translateX(-100%);
+      transition:transform 0.25s ease;
+      width:220px;
+    ">
       <div style="padding:20px 16px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);">
         ${logoHTML()}
+        <!-- Close button — mobile only -->
+        <button id="sidebar-close-btn" style="
+          margin-left:auto;
+          background:none;
+          border:none;
+          color:var(--muted);
+          cursor:pointer;
+          padding:4px;
+          display:none;
+        ">${icons.close}</button>
       </div>
       <nav style="flex:1;padding:12px 0;overflow-y:auto;">${navHTML}</nav>
       <div style="padding:14px 16px;border-top:1px solid var(--border);">
@@ -80,7 +108,20 @@ export function renderSidebar(activePage) {
 
 export function renderTopbar(title, subtitle = '') {
   return `
-    <header class="topbar">
+    <header class="topbar" style="display:flex;align-items:center;gap:12px;">
+      <!-- Hamburger button -->
+      <button id="hamburger-btn" style="
+        background:none;
+        border:none;
+        color:var(--text);
+        cursor:pointer;
+        padding:6px;
+        border-radius:6px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        flex-shrink:0;
+      ">${icons.hamburger}</button>
       <div>
         <div style="font-family:var(--font-head);font-size:18px;color:var(--text)">${title}</div>
         ${subtitle ? `<div style="font-size:11px;color:var(--muted);margin-top:1px">${subtitle}</div>` : ''}
@@ -89,6 +130,54 @@ export function renderTopbar(title, subtitle = '') {
 }
 
 export function bindSidebar() {
+  const sidebar      = document.getElementById('sidebar');
+  const overlay      = document.getElementById('sidebar-overlay');
+  const hamburgerBtn = document.getElementById('hamburger-btn');
+  const closeBtn     = document.getElementById('sidebar-close-btn');
+
+  function openSidebar() {
+    sidebar.style.transform  = 'translateX(0)';
+    overlay.style.display    = 'block';
+    closeBtn.style.display   = 'flex';
+  }
+
+  function closeSidebar() {
+    sidebar.style.transform  = 'translateX(-100%)';
+    overlay.style.display    = 'none';
+  }
+
+  // On desktop (>=768px) always show sidebar
+  function handleResize() {
+    if (window.innerWidth >= 768) {
+      sidebar.style.transform = 'translateX(0)';
+      sidebar.style.position  = 'relative';
+      sidebar.style.zIndex    = '1';
+      overlay.style.display   = 'none';
+      closeBtn.style.display  = 'none';
+      if (hamburgerBtn) hamburgerBtn.style.display = 'none';
+    } else {
+      sidebar.style.position  = 'fixed';
+      sidebar.style.zIndex    = '100';
+      sidebar.style.transform = 'translateX(-100%)';
+      if (hamburgerBtn) hamburgerBtn.style.display = 'flex';
+    }
+  }
+
+  handleResize();
+  window.addEventListener('resize', handleResize);
+
+  hamburgerBtn?.addEventListener('click', openSidebar);
+  closeBtn?.addEventListener('click', closeSidebar);
+  overlay?.addEventListener('click', closeSidebar);
+
+  // Close sidebar on nav item click (mobile)
+  document.querySelectorAll('.nav-item[data-nav]').forEach(el => {
+    el.addEventListener('click', () => {
+      if (window.innerWidth < 768) closeSidebar();
+    });
+  });
+
+  // Logout
   document.getElementById('logout-btn')?.addEventListener('click', () => {
     auth.logout();
     navigate('login');
