@@ -63,6 +63,47 @@ export function renderDashboard() {
           </div>
         </div>
 
+        <!-- Stock Valuation Report -->
+        <div class="card" style="overflow:hidden;margin-bottom:20px;">
+          <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:13px;font-weight:500;color:var(--text)">📊 Stock Valuation Report</span>
+            <button id="valuation-toggle-btn" class="btn btn-ghost" style="font-size:11px;padding:5px 10px;">Load Report</button>
+          </div>
+          <div id="valuation-summary" style="display:none;padding:16px 18px;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;">
+            <div class="stat-card" style="padding:14px;">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">TOTAL UNITS</div>
+              <div id="val-units" style="font-size:22px;font-weight:700;color:var(--text);font-family:var(--font-head);">—</div>
+            </div>
+            <div class="stat-card" style="padding:14px;">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">COST VALUE</div>
+              <div id="val-cost" style="font-size:22px;font-weight:700;color:#f87171;font-family:var(--font-head);">—</div>
+            </div>
+            <div class="stat-card" style="padding:14px;">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">SELLING VALUE</div>
+              <div id="val-selling" style="font-size:22px;font-weight:700;color:var(--accent-lt);font-family:var(--font-head);">—</div>
+            </div>
+            <div class="stat-card" style="padding:14px;">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">POTENTIAL PROFIT</div>
+              <div id="val-profit" style="font-size:22px;font-weight:700;font-family:var(--font-head);">—</div>
+            </div>
+          </div>
+          <div id="valuation-table-wrap" style="display:none;overflow-x:auto;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Units</th>
+                  <th>Sell Price</th>
+                  <th>Cost Value</th>
+                  <th>Selling Value</th>
+                  <th>Potential Profit</th>
+                </tr>
+              </thead>
+              <tbody id="valuation-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- Low stock alerts -->
         <div id="low-stock-section" class="card" style="overflow:hidden;margin-bottom:20px;display:none;">
           <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
@@ -126,6 +167,7 @@ export async function initDashboard() {
       loadExpiry(),
     ]);
     initProductSearch();
+    initStockValuation();
   } else {
     loadUserStats();
     loadRecentSalesBasic();
@@ -137,7 +179,6 @@ async function loadAnalytics() {
   try {
     const d = await api.get('/dashboard/analytics');
 
-    // ── Stat cards ────────────────────────────────────────────────────────────
     document.getElementById('stats-row').innerHTML = `
       ${statCard('Sales Today',     `₦${fmt(d.sales_today)}`,        '💰', 'var(--accent)')}
       ${statCard('Transactions',    d.sales_today_count,              '🧾', 'var(--info)')}
@@ -145,7 +186,6 @@ async function loadAnalytics() {
       ${statCard('Low Stock Items', d.low_stock_count,                '⚠️', 'var(--warn)')}
       ${statCard('Out of Stock',    d.out_of_stock_count,             '🚨', 'var(--danger)')}`;
 
-    // ── Profit card ───────────────────────────────────────────────────────────
     const profitColor = d.profit_estimate >= 0 ? 'var(--accent-lt)' : '#f87171';
     document.getElementById('profit-card').innerHTML =
       `<span style="color:${profitColor};">₦${fmt(d.profit_estimate)}</span>`;
@@ -154,10 +194,8 @@ async function loadAnalytics() {
       <span>Expenses: <strong style="color:#f87171">₦${fmt(d.total_expenses)}</strong></span>
       <span>Purchases: <strong style="color:#f87171">₦${fmt(d.total_purchases)}</strong></span>`;
 
-    // ── Purchases card ────────────────────────────────────────────────────────
     document.getElementById('purchases-card').innerHTML = `₦${fmt(d.total_purchases)}`;
 
-    // ── Low stock alerts table ────────────────────────────────────────────────
     if (d.low_stock_alerts.length) {
       document.getElementById('low-stock-section').style.display = 'block';
       document.getElementById('low-stock-tbody').innerHTML = d.low_stock_alerts.map(s => `
@@ -168,7 +206,6 @@ async function loadAnalytics() {
         </tr>`).join('');
     }
 
-    // ── Recent sales table ────────────────────────────────────────────────────
     const tbody = document.getElementById('recent-sales');
     if (!d.recent_sales.length) {
       tbody.innerHTML = tableEmptyRow(4, 'No sales recorded yet.');
@@ -275,6 +312,70 @@ function initProductSearch() {
 
   btn.addEventListener('click', doSearch);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+}
+
+// ── Stock Valuation ───────────────────────────────────────────────────────────
+function initStockValuation() {
+  const btn       = document.getElementById('valuation-toggle-btn');
+  const summary   = document.getElementById('valuation-summary');
+  const tableWrap = document.getElementById('valuation-table-wrap');
+  if (!btn) return;
+
+  let loaded = false;
+
+  btn.addEventListener('click', async () => {
+    if (loaded) {
+      const visible = summary.style.display === 'grid';
+      summary.style.display   = visible ? 'none' : 'grid';
+      tableWrap.style.display = visible ? 'none' : 'block';
+      btn.textContent = visible ? 'Show Report' : 'Hide Report';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Loading…';
+
+    try {
+      const data = await api.get('/dashboard/stock-valuation');
+      const s    = data.summary;
+
+      document.getElementById('val-units').textContent   = s.total_units.toLocaleString();
+      document.getElementById('val-cost').textContent    = `₦${fmt(s.total_cost_value)}`;
+      document.getElementById('val-selling').textContent = `₦${fmt(s.total_selling_value)}`;
+
+      const profitEl = document.getElementById('val-profit');
+      profitEl.textContent = `₦${fmt(s.potential_profit)}`;
+      profitEl.style.color = s.potential_profit >= 0 ? 'var(--accent-lt)' : '#f87171';
+
+      const tbody = document.getElementById('valuation-tbody');
+      if (!data.products.length) {
+        tbody.innerHTML = tableEmptyRow(6, 'No stock data available.');
+      } else {
+        tbody.innerHTML = data.products.map(p => {
+          const profitColor = p.potential_profit >= 0 ? 'var(--accent-lt)' : '#f87171';
+          return `<tr>
+            <td style="font-weight:500">${p.product_name}</td>
+            <td>${p.total_quantity.toLocaleString()}</td>
+            <td>₦${fmt(p.selling_price)}</td>
+            <td style="color:#f87171">₦${fmt(p.total_cost_value)}</td>
+            <td style="color:var(--accent-lt)">₦${fmt(p.total_selling_value)}</td>
+            <td style="color:${profitColor};font-weight:600">₦${fmt(p.potential_profit)}</td>
+          </tr>`;
+        }).join('');
+      }
+
+      summary.style.display   = 'grid';
+      tableWrap.style.display = 'block';
+      btn.textContent = 'Hide Report';
+      loaded = true;
+
+    } catch (err) {
+      btn.textContent = 'Load Report';
+      alert(`Could not load valuation: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
 
 // ── User view (non-admin) ─────────────────────────────────────────────────────
