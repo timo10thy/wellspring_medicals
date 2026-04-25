@@ -22,7 +22,7 @@ export function renderDashboard() {
       <div class="page-body">
 
         <!-- Stat cards -->
-        <div id="stats-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:28px;">
+        <div id="stats-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;">
           ${[1,2,3,4,5].map(() => `
             <div class="stat-card">
               <div class="skeleton" style="height:32px;width:80px;margin-bottom:8px;"></div>

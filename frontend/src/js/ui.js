@@ -135,28 +135,33 @@ export function bindSidebar() {
   const hamburgerBtn = document.getElementById('hamburger-btn');
   const closeBtn     = document.getElementById('sidebar-close-btn');
 
-  function openSidebar() {
-    sidebar.classList.add('open');
-    overlay.style.display = 'block';
-    closeBtn.style.display = 'flex';
+  
+ function openSidebar() {
+    sidebar.style.transform  = 'translateX(0)';
+    overlay.style.display    = 'block';
+    closeBtn.style.display   = 'flex';
   }
 
   function closeSidebar() {
-    sidebar.classList.remove('open');
-    overlay.style.display = 'none';
-    closeBtn.style.display = 'none';
+    sidebar.style.transform  = 'translateX(-100%)';
+    overlay.style.display    = 'none';
+    closeBtn.style.display   = 'none';
   }
 
   function handleResize() {
     if (window.innerWidth >= 768) {
-      sidebar.classList.remove('open');
-      overlay.style.display  = 'none';
-      closeBtn.style.display = 'none';
+      sidebar.style.transform = 'translateX(0)';
+      overlay.style.display   = 'none';
+      closeBtn.style.display  = 'none';
       if (hamburgerBtn) hamburgerBtn.style.display = 'none';
     } else {
+      sidebar.style.transform = 'translateX(-100%)';
       if (hamburgerBtn) hamburgerBtn.style.display = 'flex';
     }
   }
+
+
+
 
   handleResize();
   window.addEventListener('resize', handleResize);
