@@ -78,6 +78,11 @@ window.addEventListener('popstate', (e) => {
 export function initRouter() {
   const full = location.hash.replace('#', '').trim() || 'home';
   const [page, queryString] = full.split('?');
-  const params = Object.fromEntries(new URLSearchParams(queryString || ''));
+
+  // Read params from hash query string OR from URL search params
+  const hashParams   = Object.fromEntries(new URLSearchParams(queryString || ''));
+  const searchParams = Object.fromEntries(new URLSearchParams(location.search || ''));
+  const params       = { ...searchParams, ...hashParams };
+
   navigate(page, params);
 }
