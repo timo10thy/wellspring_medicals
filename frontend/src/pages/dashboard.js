@@ -118,7 +118,7 @@ export function renderDashboard() {
           </div>
         </div>` : ''}
 
-        <div style="display:grid;grid-template-columns:${isAdmin ? '1fr 1fr' : '1fr'};gap:20px;">
+        <div style="display:grid;grid-template-columns:1fr;gap:16px;">
 
           <!-- Recent Sales -->
           <div class="card" style="overflow:hidden;">
