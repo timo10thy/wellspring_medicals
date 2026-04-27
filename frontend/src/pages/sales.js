@@ -201,10 +201,12 @@ async function addToCart(productId, productName, availableQty) {
   const errEl = document.getElementById('ns-error');
   errEl.classList.remove('show');
 
-  // If already in cart, just bump qty
+  // If already in cart, just bump qty by 1 (capped at available)
   const existing = cart.find(i => i.product_id === productId);
   if (existing) {
-    existing.qty = Math.min(existing.qty + 1, existing.available_qty);
+    if (existing.qty < existing.available_qty) {
+      existing.qty += 1;
+    }
     renderCart();
     document.getElementById('ns-search-results').style.display = 'none';
     document.getElementById('ns-product-search').value = '';
@@ -221,7 +223,7 @@ async function addToCart(productId, productName, availableQty) {
       stock_id:      stockData.id,
       selling_price: parseFloat(details.price),
       available_qty: availableQty,
-      qty:           1,
+      qty:           1,               // always start at 1, never default to full stock
     });
 
     renderCart();
@@ -240,7 +242,6 @@ function renderCart() {
   const cartSection  = document.getElementById('cart-section');
   const emptyHint    = document.getElementById('cart-empty-hint');
   const cartItemsEl  = document.getElementById('cart-items');
-  const grandTotalEl = document.getElementById('cart-grand-total');
 
   if (!cart.length) {
     cartSection.style.display = 'none';
@@ -266,7 +267,7 @@ function renderCart() {
           <label style="font-size:12px;color:var(--muted);">Qty:</label>
           <input type="number" class="field-input cart-qty-input" data-idx="${idx}"
             value="${item.qty}" min="1" max="${item.available_qty}"
-            style="width:70px;padding:4px 8px;font-size:13px;"/>
+            style="width:70px;padding:4px 8px;font-size:13px;text-align:center;"/>
           <span style="font-size:11px;color:var(--muted);">/ ${item.available_qty}</span>
         </div>
         <div style="font-size:13px;font-weight:500;color:var(--accent-lt);margin-left:auto;">
@@ -275,15 +276,35 @@ function renderCart() {
       </div>
     </div>`).join('');
 
-  // Bind qty inputs
+  // ── Qty input: use 'change' + 'blur' so user can type freely (e.g. "13")
+  // without each keystroke clamping the value mid-type.
   cartItemsEl.querySelectorAll('.cart-qty-input').forEach(input => {
+    // Live feedback: just update total while typing without clamping
     input.addEventListener('input', () => {
       const idx = parseInt(input.dataset.idx);
-      let val   = parseInt(input.value) || 1;
-      val       = Math.max(1, Math.min(val, cart[idx].available_qty));
+      const raw = parseInt(input.value);
+      if (!isNaN(raw) && raw >= 1 && raw <= cart[idx].available_qty) {
+        cart[idx].qty = raw;
+        updateGrandTotal();
+      }
+    });
+
+    // Clamp and enforce limits only when user leaves the field
+    input.addEventListener('blur', () => {
+      const idx = parseInt(input.dataset.idx);
+      let val   = parseInt(input.value);
+
+      if (isNaN(val) || val < 1) val = 1;
+      if (val > cart[idx].available_qty) val = cart[idx].available_qty;
+
       cart[idx].qty = val;
       input.value   = val;
       updateGrandTotal();
+    });
+
+    // Also clamp on Enter key
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur();
     });
   });
 
@@ -315,6 +336,14 @@ async function submitSale() {
 
   if (!cart.length) {
     errEl.querySelector('span').textContent = 'Add at least one product to the cart.';
+    errEl.classList.add('show');
+    return;
+  }
+
+  // Validate all quantities before submitting
+  const invalid = cart.find(i => !i.qty || i.qty < 1);
+  if (invalid) {
+    errEl.querySelector('span').textContent = `Quantity for "${invalid.product_name}" must be at least 1.`;
     errEl.classList.add('show');
     return;
   }

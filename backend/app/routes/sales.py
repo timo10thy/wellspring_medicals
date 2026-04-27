@@ -21,7 +21,7 @@ db_dependency = Annotated[Session, Depends(get_db)]
 
 @router.post("/create", status_code=status.HTTP_201_CREATED)
 def create_sales(
-    sales_data: MultiSaleCreate,          # ← was SaleCreate, now MultiSaleCreate
+    sales_data: MultiSaleCreate,
     db: db_dependency,
     current_user: User = Depends(AuthMiddleware)
 ):
@@ -52,15 +52,11 @@ def create_sales(
             if not product:
                 raise HTTPException(status_code=404, detail="Product not found")
 
+            # Block selling ABOVE the product price (for everyone)
             if item.selling_price > product.price:
-                raise HTTPException(status_code=409, detail=f"Cannot sell {product.name} above its price")
+                raise HTTPException(status_code=409, detail=f"Cannot sell {product.name} above its listed price")
 
-            if item.selling_price < product.price and current_user.role != "ADMIN":
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Selling {product.name} below price requires admin approval"
-                )
-
+            # Selling at or below price is allowed for all users
             total_amount = item.quantity_sold * item.selling_price
 
             sale = Sales(
