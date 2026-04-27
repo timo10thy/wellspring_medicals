@@ -11,6 +11,44 @@ import { renderSidebar, renderTopbar, bindSidebar,
 
 export function renderProducts() {
   return `
+  <style>
+    /* ── Products page mobile fixes ── */
+    .products-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .products-search-wrap {
+      position: relative;
+      flex: 1;
+      min-width: 0;
+      max-width: 320px;
+    }
+    .products-search-wrap .search-icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      pointer-events: none;
+    }
+    .products-search-wrap .field-input {
+      padding-left: 36px;
+      width: 100%;
+    }
+    #add-product-btn { white-space: nowrap; flex-shrink: 0; }
+
+    .ap-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    @media (max-width: 768px) {
+      .products-search-wrap { max-width: 100%; }
+      .ap-grid-2 { grid-template-columns: 1fr !important; }
+    }
+  </style>
+
   <div class="page-enter app-layout">
     ${renderSidebar('products')}
     <div class="main-content">
@@ -18,10 +56,10 @@ export function renderProducts() {
       <div class="page-body">
 
         <!-- Toolbar -->
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
-          <div style="position:relative;flex:1;max-width:320px;">
-            <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;">${icons.search}</span>
-            <input id="product-search" class="field-input" type="text" placeholder="Search products…" style="padding-left:36px;"/>
+        <div class="products-toolbar">
+          <div class="products-search-wrap">
+            <span class="search-icon">${icons.search}</span>
+            <input id="product-search" class="field-input" type="text" placeholder="Search products…"/>
           </div>
           <button id="add-product-btn" class="btn btn-primary">${icons.plus} Add Product</button>
         </div>
@@ -57,7 +95,7 @@ export function renderProducts() {
           <input class="field-input" id="ap-name" type="text" placeholder="e.g. Paracetamol 500mg" maxlength="200"/>
           <p class="field-hint hint-error" id="ap-name-hint"></p>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="ap-grid-2">
           <div>
             <label class="field-label">Price (₦)</label>
             <input class="field-input" id="ap-price" type="number" placeholder="0.00" min="0" step="0.01"/>
@@ -151,7 +189,7 @@ function renderTable(data) {
       <td><span class="badge badge-green">Active</span></td>
       <td style="color:var(--muted);font-size:12px">—</td>
       <td>
-        <button class="btn btn-ghost" style="font-size:11px;padding:5px 10px;"
+        <button class="btn btn-ghost" style="font-size:11px;padding:5px 10px;white-space:nowrap;"
           onclick="window._editPrice(${p.product_id}, '${p.product_name}')">Edit Price</button>
       </td>
     </tr>`).join('');
