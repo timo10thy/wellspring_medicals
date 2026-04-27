@@ -10,6 +10,84 @@ import { renderSidebar, renderTopbar, bindSidebar,
 
 export function renderReports() {
   return `
+  <style>
+    /* ── Reports page mobile fixes ── */
+
+    /* Tab bar */
+    .report-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .report-tab {
+      background: none;
+      border: none;
+      padding: 10px 16px;
+      font-size: 13px;
+      color: var(--muted);
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      font-family: var(--font-body);
+      white-space: nowrap;
+    }
+    .report-tab.active {
+      color: var(--accent-lt);
+      border-bottom-color: var(--accent);
+    }
+
+    /* Summary two-column grid */
+    .summary-split-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    /* Expiry table wrapper — always scrollable */
+    .expiry-table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .expiry-table-wrap table {
+      min-width: 600px;
+    }
+
+    @media (max-width: 768px) {
+      .report-tab {
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+
+      /* Collapse two-column summary grid to single column */
+      .summary-split-grid {
+        grid-template-columns: 1fr !important;
+      }
+
+      /* Period buttons wrap and stretch */
+      .period-btns-row {
+        flex-wrap: wrap;
+      }
+      .period-btns-row .period-btn {
+        flex: 1;
+        min-width: 70px;
+        text-align: center;
+        justify-content: center;
+      }
+
+      /* Consumption lookup stacks */
+      .cons-lookup-row {
+        flex-direction: column;
+        align-items: stretch !important;
+      }
+      .cons-lookup-row .btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+
   <div class="page-enter app-layout">
     ${renderSidebar('reports')}
     <div class="main-content">
@@ -17,32 +95,15 @@ export function renderReports() {
       <div class="page-body">
 
         <!-- Tab bar -->
-        <div style="display:flex;gap:6px;margin-bottom:24px;border-bottom:1px solid var(--border);padding-bottom:0;flex-wrap:wrap;">
-          <button class="report-tab active" data-tab="summary"
-            style="background:none;border:none;padding:10px 18px;font-size:13px;
-                   color:var(--accent-lt);border-bottom:2px solid var(--accent);
-                   cursor:pointer;font-family:var(--font-body);">
-            Sales Summary
-          </button>
-          <button class="report-tab" data-tab="expiry"
-            style="background:none;border:none;padding:10px 18px;font-size:13px;
-                   color:var(--muted);border-bottom:2px solid transparent;
-                   cursor:pointer;font-family:var(--font-body);">
-            Expiry Alerts
-          </button>
-          <button class="report-tab" data-tab="consumption"
-            style="background:none;border:none;padding:10px 18px;font-size:13px;
-                   color:var(--muted);border-bottom:2px solid transparent;
-                   cursor:pointer;font-family:var(--font-body);">
-            Consumption Report
-          </button>
+        <div class="report-tabs">
+          <button class="report-tab active" data-tab="summary">Sales Summary</button>
+          <button class="report-tab" data-tab="expiry">Expiry Alerts</button>
+          <button class="report-tab" data-tab="consumption">Consumption Report</button>
         </div>
 
         <!-- ── Sales Summary Tab ── -->
         <div id="tab-summary">
-
-          <!-- Period selector -->
-          <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">
+          <div class="period-btns-row" style="display:flex;gap:8px;margin-bottom:20px;">
             ${['daily','weekly','monthly','yearly'].map((p, i) => `
               <button class="period-btn ${i === 0 ? 'btn btn-primary' : 'btn btn-ghost'}"
                 data-period="${p}"
@@ -50,7 +111,6 @@ export function renderReports() {
                 ${p.charAt(0).toUpperCase() + p.slice(1)}
               </button>`).join('')}
           </div>
-
           <div id="summary-content">
             <div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;padding:40px 0;">
               <span class="spinner" style="border-top-color:var(--accent)"></span> Loading summary…
@@ -71,7 +131,7 @@ export function renderReports() {
                 ${icons.refresh} Refresh
               </button>
             </div>
-            <div style="overflow-x:auto;">
+            <div class="expiry-table-wrap">
               <table class="data-table">
                 <thead><tr>
                   <th>Stock ID</th><th>Product</th><th>Qty</th><th>Expiry Date</th>
@@ -89,7 +149,7 @@ export function renderReports() {
             <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:14px;">
               Look Up Stock Consumption
             </div>
-            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+            <div class="cons-lookup-row" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
               <div style="flex:1;min-width:160px;">
                 <label class="field-label">Stock ID</label>
                 <input class="field-input" id="cons-stock-id" type="number"
@@ -111,7 +171,6 @@ export async function initReports() {
   bindTabs();
   bindPeriodBtns();
 
-  // Load default daily summary
   await loadSummary('daily');
 
   document.getElementById('refresh-expiry')?.addEventListener('click', loadExpiry);
@@ -130,13 +189,7 @@ export async function initReports() {
 function bindTabs() {
   document.querySelectorAll('.report-tab').forEach(tab => {
     tab.addEventListener('click', () => {
-      document.querySelectorAll('.report-tab').forEach(t => {
-        t.style.color = 'var(--muted)';
-        t.style.borderBottomColor = 'transparent';
-        t.classList.remove('active');
-      });
-      tab.style.color = 'var(--accent-lt)';
-      tab.style.borderBottomColor = 'var(--accent)';
+      document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
 
       const which = tab.getAttribute('data-tab');
@@ -144,7 +197,6 @@ function bindTabs() {
       document.getElementById('tab-expiry').style.display      = which === 'expiry'      ? 'block' : 'none';
       document.getElementById('tab-consumption').style.display = which === 'consumption' ? 'block' : 'none';
 
-      // Lazy load expiry when tab first opened
       if (which === 'expiry') loadExpiry();
     });
   });
@@ -184,7 +236,7 @@ async function loadSummary(period) {
       </div>
 
       <!-- KPI cards -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:24px;">
         ${kpiCard('Total Sales',    `₦${fmt(d.total_sales_amount)}`, '💰', 'var(--accent-lt)')}
         ${kpiCard('Transactions',   d.total_sales_count,             '🧾', 'var(--info)')}
         ${kpiCard('Units Sold',     d.total_units_sold,              '📦', 'var(--text)')}
@@ -195,7 +247,8 @@ async function loadSummary(period) {
         ${kpiCard('Profit',         `₦${fmt(d.profit)}`,            '📈', profitColor)}
       </div>
 
-      <div style="display:grid;grid-template-columns:${d.expense_breakdown.length ? '1fr 1fr' : '1fr'};gap:20px;margin-bottom:24px;flex-wrap:wrap;">
+      <!-- Top products + Expense breakdown -->
+      <div class="summary-split-grid" style="grid-template-columns:${d.expense_breakdown.length ? '1fr 1fr' : '1fr'};">
 
         <!-- Top selling products -->
         <div class="card" style="overflow:hidden;">
@@ -302,10 +355,10 @@ async function loadExpiry() {
           <td style="color:var(--muted)">#${a.stock_id}</td>
           <td style="font-weight:500">${a.product_name}</td>
           <td>${a.quantity_affected}</td>
-          <td>${fmtDate(a.expire_date)}</td>
+          <td style="white-space:nowrap;">${fmtDate(a.expire_date)}</td>
           <td><span class="badge ${urgency}">${a.days_to_expire <= 0 ? 'Expired' : a.days_to_expire + 'd'}</span></td>
-          <td>₦${fmt(a.stock_value_cost)}</td>
-          <td style="font-size:11px;color:var(--muted);max-width:200px;">${a.recommended_action}</td>
+          <td style="white-space:nowrap;">₦${fmt(a.stock_value_cost)}</td>
+          <td style="font-size:11px;color:var(--muted);min-width:140px;">${a.recommended_action}</td>
         </tr>`;
       }).join('');
   } catch (err) {
@@ -334,7 +387,7 @@ async function loadConsumption(stockId) {
           <span style="font-size:13px;color:var(--muted);font-family:var(--font-body);">— Stock #${r.stock_id}</span>
         </div>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px;">
           ${[
             ['Current Qty',    r.current_quantity.toLocaleString(),    'var(--accent)'],
             ['Initial Qty',    r.initial_stock_quantity.toLocaleString(), 'var(--info)'],

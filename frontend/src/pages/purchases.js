@@ -15,6 +15,69 @@ const PAYMENTS = ['CASH','TRANSFER','POS'];
 // ── Render ────────────────────────────────────────────────────────────────────
 export function renderPurchases() {
   return `
+  <style>
+    /* ── Purchases page mobile fixes ── */
+    .purchases-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .purchases-search-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex: 1;
+      min-width: 0;
+    }
+    .purchases-search-group .field-input {
+      flex: 1;
+      min-width: 0;
+    }
+    #new-receipt-btn {
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    /* Receipts table: card-based on mobile, table on desktop */
+    .receipts-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .receipts-table thead tr { background: var(--surface2); text-align: left; }
+    .receipts-table th {
+      padding: 10px 14px;
+      color: var(--muted);
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .receipts-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    .receipts-table .col-actions { white-space: nowrap; }
+
+    /* Mobile: hide table, show cards */
+    @media (max-width: 768px) {
+      .purchases-actions { gap: 8px; }
+      .purchases-search-group { width: 100%; }
+      #new-receipt-btn { width: 100%; justify-content: center; }
+
+      .receipts-table-wrap { display: none !important; }
+      .receipt-cards { display: flex !important; flex-direction: column; gap: 10px; padding: 12px; }
+
+      /* Modal item row grids collapse to 1 col */
+      .nr-grid-2 { grid-template-columns: 1fr !important; }
+      .nr-grid-3 { grid-template-columns: 1fr !important; }
+
+      /* Detail modal item meta wraps */
+      .detail-item-meta { flex-direction: column; gap: 4px !important; }
+    }
+
+    /* Desktop: hide cards, show table */
+    @media (min-width: 769px) {
+      .receipt-cards { display: none !important; }
+      .receipts-table-wrap { display: block; overflow-x: auto; }
+    }
+  </style>
+
   <div class="page-enter app-layout">
     ${renderSidebar('purchases')}
     <div class="main-content">
@@ -22,9 +85,9 @@ export function renderPurchases() {
       <div class="page-body">
 
         <!-- Actions row -->
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
-          <div style="display:flex;gap:8px;align-items:center;flex:1;min-width:200px;">
-            <input class="field-input" id="supplier-search" type="text" placeholder="Search by supplier name…" style="max-width:280px;"/>
+        <div class="purchases-actions">
+          <div class="purchases-search-group">
+            <input class="field-input" id="supplier-search" type="text" placeholder="Search by supplier…"/>
             <button id="supplier-search-btn" class="btn btn-ghost">${icons.search} Search</button>
             <button id="clear-search-btn" class="btn btn-ghost" style="display:none;">Clear</button>
           </div>
@@ -70,7 +133,7 @@ export function renderPurchases() {
       <form id="new-receipt-form" novalidate style="display:flex;flex-direction:column;gap:14px;">
 
         <!-- Supplier info -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="nr-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
             <label class="field-label">Supplier Name</label>
             <input class="field-input" id="nr-supplier-name" type="text" placeholder="e.g. Emzor Pharma"/>
@@ -83,7 +146,7 @@ export function renderPurchases() {
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="nr-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
           <div>
             <label class="field-label">Payment Type</label>
             <select class="field-input" id="nr-payment">
@@ -205,26 +268,27 @@ async function loadReceipts(supplier = '') {
       return;
     }
 
-    el.innerHTML = `
-      <div style="overflow-x:auto;">
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+    // ── Desktop table ──
+    const tableHtml = `
+      <div class="receipts-table-wrap">
+        <table class="receipts-table">
           <thead>
-            <tr style="background:var(--surface2);text-align:left;">
+            <tr>
               ${['Receipt No.','Supplier','Payment','Items','Total Cost','Date',''].map(h =>
-                `<th style="padding:10px 14px;color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);">${h}</th>`
+                `<th>${h}</th>`
               ).join('')}
             </tr>
           </thead>
           <tbody>
             ${data.map(r => `
-              <tr style="border-bottom:1px solid var(--border);">
-                <td style="padding:10px 14px;font-weight:500;color:var(--accent-lt);">${r.receipt_number}</td>
-                <td style="padding:10px 14px;color:var(--text);">${r.supplier_name}</td>
-                <td style="padding:10px 14px;">${r.payment_type}</td>
-                <td style="padding:10px 14px;color:var(--muted);">${r.item_count} item${r.item_count !== 1 ? 's' : ''}</td>
-                <td style="padding:10px 14px;font-weight:500;color:var(--text);">₦${fmt(r.total_cost)}</td>
-                <td style="padding:10px 14px;color:var(--muted);">${r.purchase_date}</td>
-                <td style="padding:10px 14px;">
+              <tr>
+                <td style="font-weight:500;color:var(--accent-lt);">${r.receipt_number}</td>
+                <td style="color:var(--text);">${r.supplier_name}</td>
+                <td>${r.payment_type}</td>
+                <td style="color:var(--muted);">${r.item_count} item${r.item_count !== 1 ? 's' : ''}</td>
+                <td style="font-weight:500;color:var(--text);">₦${fmt(r.total_cost)}</td>
+                <td style="color:var(--muted);white-space:nowrap;">${r.purchase_date}</td>
+                <td class="col-actions">
                   <div style="display:flex;gap:6px;">
                     <button class="btn btn-ghost view-receipt-btn" style="font-size:11px;padding:4px 10px;" data-id="${r.id}">View</button>
                     <button class="btn btn-danger del-receipt-btn" style="font-size:11px;padding:4px 10px;" data-id="${r.id}">Delete</button>
@@ -234,6 +298,31 @@ async function loadReceipts(supplier = '') {
           </tbody>
         </table>
       </div>`;
+
+    // ── Mobile cards ──
+    const cardsHtml = `
+      <div class="receipt-cards">
+        ${data.map(r => `
+          <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:14px;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;gap:8px;">
+              <div style="font-weight:600;color:var(--accent-lt);font-size:13px;word-break:break-all;">${r.receipt_number}</div>
+              <span class="badge badge-blue" style="white-space:nowrap;flex-shrink:0;">${r.payment_type}</span>
+            </div>
+            <div style="font-size:13px;color:var(--text);margin-bottom:4px;">${r.supplier_name}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-bottom:10px;">
+              <span>${r.item_count} item${r.item_count !== 1 ? 's' : ''} · ${r.purchase_date}</span>
+              <span style="font-weight:600;color:var(--text);font-size:14px;">₦${fmt(r.total_cost)}</span>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-ghost view-receipt-btn" style="flex:1;font-size:12px;justify-content:center;" data-id="${r.id}">View</button>
+              <button class="btn btn-danger del-receipt-btn" style="flex:1;font-size:12px;justify-content:center;" data-id="${r.id}">Delete</button>
+            </div>
+          </div>`).join('')}
+      </div>`;
+
+    el.style.padding = '0';
+    el.style.textAlign = 'left';
+    el.innerHTML = tableHtml + cardsHtml;
 
     el.querySelectorAll('.view-receipt-btn').forEach(btn => {
       btn.addEventListener('click', () => viewReceipt(parseInt(btn.dataset.id)));
@@ -262,8 +351,8 @@ async function viewReceipt(id) {
   try {
     const r = await api.get(`/purchase-receipts/${id}`);
     body.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-        <div style="font-family:var(--font-head);font-size:15px;color:var(--text)">${r.receipt_number}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:8px;flex-wrap:wrap;">
+        <div style="font-family:var(--font-head);font-size:15px;color:var(--text);word-break:break-all;">${r.receipt_number}</div>
         <span class="badge badge-green">Completed</span>
       </div>
       ${detailRow('Supplier',      r.supplier_name)}
@@ -277,11 +366,11 @@ async function viewReceipt(id) {
         <div style="font-size:12px;font-weight:500;color:var(--muted);margin-bottom:10px;">LINE ITEMS</div>
         ${r.items.map(item => `
           <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:8px;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;gap:8px;flex-wrap:wrap;">
               <span style="font-size:13px;font-weight:500;color:var(--text)">${item.product_name_snapshot}</span>
               <span style="font-size:13px;font-weight:500;color:var(--accent-lt)">₦${fmt(item.total_line_cost)}</span>
             </div>
-            <div style="font-size:11px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;">
+            <div class="detail-item-meta" style="font-size:11px;color:var(--muted);display:flex;gap:16px;flex-wrap:wrap;">
               <span>Qty: <strong>${item.quantity_purchased}</strong></span>
               <span>Unit cost: <strong>₦${fmt(item.unit_cost)}</strong></span>
               ${item.expiry_date ? `<span>Expiry: <strong>${item.expiry_date}</strong></span>` : ''}
@@ -304,7 +393,7 @@ function addItem() {
   div.innerHTML = `
     <button type="button" class="remove-item-btn btn btn-ghost"
       style="position:absolute;top:8px;right:8px;padding:3px 8px;font-size:11px;">✕</button>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+    <div class="nr-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
       <div>
         <label class="field-label">Product Name</label>
         <input class="field-input item-name" type="text" placeholder="e.g. Paracetamol 500mg"/>
@@ -314,7 +403,7 @@ function addItem() {
         <input class="field-input item-product-id" type="number" placeholder="Product ID" min="1"/>
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+    <div class="nr-grid-3" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
       <div>
         <label class="field-label">Quantity</label>
         <input class="field-input item-qty" type="number" placeholder="0" min="1"/>
@@ -473,8 +562,8 @@ async function confirmDeleteReceipt() {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function detailRow(label, value) {
   return `<div style="display:flex;justify-content:space-between;align-items:center;
-    padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">
-    <span style="color:var(--muted)">${label}</span><span>${value}</span>
+    padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;gap:8px;flex-wrap:wrap;">
+    <span style="color:var(--muted);flex-shrink:0;">${label}</span><span>${value}</span>
   </div>`;
 }
 
