@@ -1,13 +1,9 @@
-// ── Sales Page ────────────────────────────────────────────────────────────────
-// POST /sales/create  (multi-item)
-// GET  /sales/{id}/salesreceipt
-
 import { api }                                     from '../js/api.js';
 import { renderSidebar, renderTopbar, bindSidebar,
          openModal, closeModal, bindModalClose,
          fmt, fmtDateTime, icons }                 from '../js/ui.js';
 
-// ── Render ────────────────────────────────────────────────────────────────────
+// Render
 export function renderSales() {
   return `
   <div class="page-enter app-layout">
