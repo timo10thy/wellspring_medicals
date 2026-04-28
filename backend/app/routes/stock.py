@@ -18,6 +18,7 @@ import logging
 
 logger=logging.getLogger(__name__)
 router=APIRouter(prefix='/stock',tags=['Stock'])
+
 @router.post('/create', response_model=StockResponse, status_code=status.HTTP_201_CREATED)
 def stock_create(stock_data: StockCreate,db: Session = Depends(get_db),current_admin: User = Depends(admin_validation)):
     
@@ -33,7 +34,6 @@ def stock_create(stock_data: StockCreate,db: Session = Depends(get_db),current_a
             detail="Stock cost price must be greater than zero"
         )
 
-   
     try:
         product = db.query(Products).filter(
             Products.id == stock_data.product_id
@@ -45,7 +45,6 @@ def stock_create(stock_data: StockCreate,db: Session = Depends(get_db),current_a
                 detail="Product not found"
             )
 
-        
         new_stock = Stocks(
             product_id=stock_data.product_id,
             quantity=stock_data.quantity,
@@ -68,7 +67,6 @@ def stock_create(stock_data: StockCreate,db: Session = Depends(get_db),current_a
         )
 
 
-
 @router.get("/by-product/{product_id}", response_model=StockResponse, status_code=status.HTTP_200_OK)
 def get_stock_by_product(product_id: int, db: Session = Depends(get_db), current_user: User = Depends(AuthMiddleware)):
     stock = db.query(Stocks).filter(
@@ -83,8 +81,10 @@ def get_stock_by_product(product_id: int, db: Session = Depends(get_db), current
         raise HTTPException(status_code=404, detail="No available stock for this product")
 
     return stock
-@router.get("/{stock_id}/consumption",response_model=StockConsumptionReport,status_code=status.HTTP_200_OK)
-def check_consumption(stock_id: int,db: Session = Depends(get_db),current_admin: User = Depends(admin_validation)):
+
+
+@router.get("/{stock_id}/consumption", response_model=StockConsumptionReport, status_code=status.HTTP_200_OK)
+def check_consumption(stock_id: int, db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
     stock = db.query(Stocks).filter(Stocks.id == stock_id).first()
     if not stock:
         raise HTTPException(
@@ -123,13 +123,13 @@ def check_consumption(stock_id: int,db: Session = Depends(get_db),current_admin:
         "estimated_days_remaining": estimated_days_remaining
     }
 
+
 @router.post('/add/stock', response_model=StockResponse, status_code=status.HTTP_201_CREATED)
 def new_stock(
     stock_data: StockCreate,
     db: Session = Depends(get_db),
     current_admin: User = Depends(admin_validation)
 ):
-    # Find product by name (case-insensitive)
     product = db.query(Products).filter(
         Products.name.ilike(stock_data.product_name)
     ).first()
@@ -159,14 +159,16 @@ def new_stock(
         db.commit()
         db.refresh(new_stock_entry)
         return new_stock_entry
+
+
 def get_total_stock_quantity(product_id: int, db: Session):
     all_stocks = db.query(Stocks).filter(Stocks.product_id == product_id).all()
     return sum(stock.quantity for stock in all_stocks)
 
 
-@router.get("/stock/total", response_model=list[TotalProductStock],status_code=status.HTTP_200_OK)
-def total_product_per_stock(db:Session = Depends(get_db), current_admin: User=Depends(admin_validation)):
-    total_stock =(
+@router.get("/stock/total", response_model=list[TotalProductStock], status_code=status.HTTP_200_OK)
+def total_product_per_stock(db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
+    total_stock = (
         db.query(
             Products.id.label("product_id"),
             Products.name.label("product_name"),
@@ -176,7 +178,6 @@ def total_product_per_stock(db:Session = Depends(get_db), current_admin: User=De
         .group_by(Products.id, Products.name)
         .all()
     )
-
     return total_stock
 
 
@@ -200,9 +201,9 @@ def get_product_total_stock(product_id: int, db: Session = Depends(get_db), curr
     return total_stock
 
 
-@router.get("/stock/total/search",response_model=list[TotalProductStock],status_code=status.HTTP_200_OK)
-def total_product_per_stock(db:Session = Depends(get_db), current_admin: User=Depends(admin_validation)):
-    total_stock =(
+@router.get("/stock/total/search", response_model=list[TotalProductStock], status_code=status.HTTP_200_OK)
+def total_product_per_stock_search(db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
+    total_stock = (
         db.query(
             Products.id.label("product_id"),
             Products.name.label("product_name"),
@@ -212,16 +213,18 @@ def total_product_per_stock(db:Session = Depends(get_db), current_admin: User=De
         .group_by(Products.id, Products.name)
         .all()
     )
-
     return total_stock
-@router.get("/total/search",response_model=list[TotalProductStock],status_code=status.HTTP_200_OK)
+
+
+# ── All users can search products for sales ───────────────────────────────────
+@router.get("/total/search", response_model=list[TotalProductStock], status_code=status.HTTP_200_OK)
 def search_total_product_stock(
     product_name: str | None = Query(
         default=None,
         description="Search product by name (partial match)"
     ),
     db: Session = Depends(get_db),
-    current_admin: User = Depends(admin_validation),
+    current_user: User = Depends(AuthMiddleware),  # ← was admin_validation, now all users
 ):
     query = (
         db.query(
@@ -241,79 +244,6 @@ def search_total_product_stock(
     return query.all()
 
 
-@router.get("/stocks/expiry-alerts",response_model=list[StockExpireAlert],status_code=status.HTTP_200_OK)
-def expiration_alert(db: Session = Depends(get_db),current_admin: User = Depends(admin_validation)):
-
-    today = date.today()
-    expiry_window = today + timedelta(days=180)
-
-    stocks = (
-        db.query(Stocks)
-        .join(Stocks.product)  
-        .options(joinedload(Stocks.product)) 
-        .filter(
-            Stocks.expiry_date != None,
-            Stocks.expiry_date <= expiry_window
-        )
-        .all()
-    )
-
-    def get_expiry_action(days: int) -> str:
-        if 90 <= days <= 180:
-            return "Warning: product life span is getting low"
-        elif 45 <= days <= 89:
-            return "Warning: Product should be discounted"
-        elif 30 <= days <= 44:
-            return "Critical level: Product should be returned"
-        elif 1 <= days <= 29:
-            return "Very critical: Product will soon expire"
-        else:
-            return "Expired product - remove immediately"
-
-    alerts = []
-
-    for stock in stocks:
-        remaining_days = (stock.expiry_date - today).days
-
-        alerts.append(
-            StockExpireAlert(
-                stock_id=stock.id,
-                product_id=stock.product_id,
-                product_name=stock.product.name,
-                expire_date=stock.expiry_date,
-                days_to_expire=remaining_days,
-                quantity_affected=str(stock.quantity),
-                stock_value_cost=float(stock.quantity * stock.cost_price),
-                recommended_action=get_expiry_action(remaining_days)
-            )
-        )
-
-    return alerts
-
-
-
-
-@router.get("/search/available", response_model=list[TotalProductStock], status_code=status.HTTP_200_OK)
-def search_available_products(
-    product_name: str | None = Query(default=None, description="Search product by name"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(AuthMiddleware),  # both USER and ADMIN
-):
-    query = (
-        db.query(
-            Products.id.label("product_id"),
-            Products.name.label("product_name"),
-            func.sum(Stocks.quantity).label("total_quantity")
-        )
-        .join(Stocks, Stocks.product_id == Products.id)
-        .filter(Products.is_active == True)  # only active products
-        .group_by(Products.id, Products.name)
-        .having(func.sum(Stocks.quantity) > 0)  # only products with stock
-    )
-    if product_name:
-        query = query.filter(Products.name.ilike(f"%{product_name}%"))
-    return query.all()
-
 @router.get("/stocks/expiry-alerts", response_model=list[StockExpireAlert], status_code=status.HTTP_200_OK)
 def expiration_alert(db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
 
@@ -327,7 +257,7 @@ def expiration_alert(db: Session = Depends(get_db), current_admin: User = Depend
         .filter(
             Stocks.expiry_date != None,
             Stocks.expiry_date <= expiry_window,
-            Stocks.quantity > 0  # ← ONLY show stocks with remaining quantity
+            Stocks.quantity > 0
         )
         .all()
     )
@@ -361,3 +291,25 @@ def expiration_alert(db: Session = Depends(get_db), current_admin: User = Depend
         )
 
     return alerts
+
+
+@router.get("/search/available", response_model=list[TotalProductStock], status_code=status.HTTP_200_OK)
+def search_available_products(
+    product_name: str | None = Query(default=None, description="Search product by name"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(AuthMiddleware),
+):
+    query = (
+        db.query(
+            Products.id.label("product_id"),
+            Products.name.label("product_name"),
+            func.sum(Stocks.quantity).label("total_quantity")
+        )
+        .join(Stocks, Stocks.product_id == Products.id)
+        .filter(Products.is_active == True)
+        .group_by(Products.id, Products.name)
+        .having(func.sum(Stocks.quantity) > 0)
+    )
+    if product_name:
+        query = query.filter(Products.name.ilike(f"%{product_name}%"))
+    return query.all()
