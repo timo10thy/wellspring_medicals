@@ -20,6 +20,7 @@ export const icons = {
   shopping: `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`,
   hamburger:`<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>`,
   close:    `<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  recon:    `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
 };
 
 export function logoHTML() {
@@ -40,14 +41,15 @@ export function renderSidebar(activePage) {
   const isAdmin = auth.isAdmin();
 
   const navItems = [
-    { page: 'dashboard', icon: icons.grid,     label: 'Dashboard'                      },
-    { page: 'sales',     icon: icons.cart,     label: 'Sales',     roles: ['ADMIN','USER'] },
-    { page: 'products',  icon: icons.box,      label: 'Products',  roles: ['ADMIN']        },
-    { page: 'stock',     icon: icons.stack,    label: 'Stock',     roles: ['ADMIN']        },
-    { page: 'expenses',  icon: icons.wallet,   label: 'Expenses',  roles: ['ADMIN']        },
-    { page: 'purchases', icon: icons.shopping, label: 'Purchases', roles: ['ADMIN']        },
-    { page: 'reports',   icon: icons.chart,    label: 'Reports',   roles: ['ADMIN']        },
-    { page: 'profile',   icon: icons.user,     label: 'Profile',   roles: ['ADMIN','USER'] },
+    { page: 'dashboard',      icon: icons.grid,     label: 'Dashboard'                          },
+    { page: 'sales',          icon: icons.cart,     label: 'Sales',          roles: ['ADMIN','USER'] },
+    { page: 'products',       icon: icons.box,      label: 'Products',       roles: ['ADMIN']        },
+    { page: 'stock',          icon: icons.stack,    label: 'Stock',          roles: ['ADMIN']        },
+    { page: 'expenses',       icon: icons.wallet,   label: 'Expenses',       roles: ['ADMIN']        },
+    { page: 'purchases',      icon: icons.shopping, label: 'Purchases',      roles: ['ADMIN']        },
+    { page: 'reports',        icon: icons.chart,    label: 'Reports',        roles: ['ADMIN']        },
+    { page: 'reconciliation', icon: icons.recon,    label: 'Reconciliation', roles: ['ADMIN']        },
+    { page: 'profile',        icon: icons.user,     label: 'Profile',        roles: ['ADMIN','USER'] },
   ];
 
   const navHTML = navItems
@@ -135,17 +137,16 @@ export function bindSidebar() {
   const hamburgerBtn = document.getElementById('hamburger-btn');
   const closeBtn     = document.getElementById('sidebar-close-btn');
 
-  
- function openSidebar() {
-    sidebar.style.transform  = 'translateX(0)';
-    overlay.style.display    = 'block';
-    closeBtn.style.display   = 'flex';
+  function openSidebar() {
+    sidebar.style.transform = 'translateX(0)';
+    overlay.style.display   = 'block';
+    closeBtn.style.display  = 'flex';
   }
 
   function closeSidebar() {
-    sidebar.style.transform  = 'translateX(-100%)';
-    overlay.style.display    = 'none';
-    closeBtn.style.display   = 'none';
+    sidebar.style.transform = 'translateX(-100%)';
+    overlay.style.display   = 'none';
+    closeBtn.style.display  = 'none';
   }
 
   function handleResize() {
@@ -159,9 +160,6 @@ export function bindSidebar() {
       if (hamburgerBtn) hamburgerBtn.style.display = 'flex';
     }
   }
-
-
-
 
   handleResize();
   window.addEventListener('resize', handleResize);
@@ -181,6 +179,7 @@ export function bindSidebar() {
     navigate('login');
   });
 }
+
 export function openModal(id)  { document.getElementById(id)?.classList.add('open'); }
 export function closeModal(id) { document.getElementById(id)?.classList.remove('open'); }
 export function bindModalClose(id) {

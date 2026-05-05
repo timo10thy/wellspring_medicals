@@ -11,25 +11,27 @@ import { renderProfile,    initProfile }    from '../pages/profile.js';
 import { renderAdmin,      initAdmin }      from '../pages/admin.js';
 import { renderExpenses,   initExpenses }   from '../pages/expenses.js';
 import { renderPurchases,  initPurchases }  from '../pages/purchases.js';
+import { renderReconciliation, initReconciliation } from '../pages/reconciliation.js';
 
 const app = document.getElementById('app');
 
 const PUBLIC_PAGES = ['home', 'login', 'register', 'admin-setup'];
-const ADMIN_PAGES  = ['products', 'stock', 'reports', 'expenses', 'purchases'];
+const ADMIN_PAGES  = ['products', 'stock', 'reports', 'expenses', 'purchases', 'reconciliation'];
 
 const PAGES = {
-  home:          { render: renderHome                                },
-  login:         { render: renderLogin,      init: initLogin        },
-  register:      { render: renderRegister,   init: initRegister     },
-  dashboard:     { render: renderDashboard,  init: initDashboard    },
-  products:      { render: renderProducts,   init: initProducts     },
-  stock:         { render: renderStock,      init: initStock        },
-  sales:         { render: renderSales,      init: initSales        },
-  reports:       { render: renderReports,    init: initReports      },
-  profile:       { render: renderProfile,    init: initProfile      },
-  'admin-setup': { render: renderAdmin,      init: initAdmin        },
-  expenses:      { render: renderExpenses,   init: initExpenses     },
-  purchases:     { render: renderPurchases,  init: initPurchases    },
+  home:            { render: renderHome                                          },
+  login:           { render: renderLogin,          init: initLogin              },
+  register:        { render: renderRegister,        init: initRegister          },
+  dashboard:       { render: renderDashboard,       init: initDashboard         },
+  products:        { render: renderProducts,        init: initProducts          },
+  stock:           { render: renderStock,           init: initStock             },
+  sales:           { render: renderSales,           init: initSales             },
+  reports:         { render: renderReports,         init: initReports           },
+  profile:         { render: renderProfile,         init: initProfile           },
+  'admin-setup':   { render: renderAdmin,           init: initAdmin             },
+  expenses:        { render: renderExpenses,        init: initExpenses          },
+  purchases:       { render: renderPurchases,       init: initPurchases         },
+  reconciliation:  { render: renderReconciliation,  init: initReconciliation    },
 };
 
 export function navigate(page, params = {}) {
@@ -79,7 +81,6 @@ export function initRouter() {
   const full = location.hash.replace('#', '').trim() || 'home';
   const [page, queryString] = full.split('?');
 
-  // Read params from hash query string OR from URL search params
   const hashParams   = Object.fromEntries(new URLSearchParams(queryString || ''));
   const searchParams = Object.fromEntries(new URLSearchParams(location.search || ''));
   const params       = { ...searchParams, ...hashParams };
