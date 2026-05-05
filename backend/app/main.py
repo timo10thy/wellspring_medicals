@@ -11,8 +11,13 @@ from app.routes.expenses import router as expenses
 from app.routes.purchase_receipt import router as purchase_receipts
 from app.routes.dashboard import router as dashboard
 from app.routes.reports import router as reports
+from app.routes.reconciliation import router as reconciliation   # ← new
 from app.routes.basemodel import engine
 from app.models.base import Base
+
+# Import new model so create_all picks it up
+from app.models import reconciliation as _recon_model  # noqa
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -32,7 +37,7 @@ app.add_middleware(
         "http://localhost:5500",
         "http://127.0.0.1:5500",
         "https://wellspring-medicals.onrender.com",
-        "https://wellspring-frontend-ppyo.onrender.com",  
+        "https://wellspring-frontend-ppyo.onrender.com",
         "https://wellspring-medicals.vercel.app",
     ],
     allow_credentials=True,
@@ -54,3 +59,4 @@ app.include_router(expenses)
 app.include_router(purchase_receipts)
 app.include_router(dashboard)
 app.include_router(reports)
+app.include_router(reconciliation)   
