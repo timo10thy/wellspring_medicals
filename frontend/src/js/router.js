@@ -19,19 +19,19 @@ const PUBLIC_PAGES = ['home', 'login', 'register', 'admin-setup'];
 const ADMIN_PAGES  = ['products', 'stock', 'reports', 'expenses', 'purchases', 'reconciliation'];
 
 const PAGES = {
-  home:            { render: renderHome                                          },
-  login:           { render: renderLogin,          init: initLogin              },
-  register:        { render: renderRegister,        init: initRegister          },
-  dashboard:       { render: renderDashboard,       init: initDashboard         },
-  products:        { render: renderProducts,        init: initProducts          },
-  stock:           { render: renderStock,           init: initStock             },
-  sales:           { render: renderSales,           init: initSales             },
-  reports:         { render: renderReports,         init: initReports           },
-  profile:         { render: renderProfile,         init: initProfile           },
-  'admin-setup':   { render: renderAdmin,           init: initAdmin             },
-  expenses:        { render: renderExpenses,        init: initExpenses          },
-  purchases:       { render: renderPurchases,       init: initPurchases         },
-  reconciliation:  { render: renderReconciliation,  init: initReconciliation    },
+  home:            { render: renderHome                                              },
+  login:           { render: renderLogin,          init: initLogin                  },
+  register:        { render: renderRegister,        init: initRegister              },
+  dashboard:       { render: renderDashboard,       init: initDashboard             },
+  products:        { render: renderProducts,        init: initProducts              },
+  stock:           { render: renderStock,           init: initStock                 },
+  sales:           { render: renderSales,           init: initSales                 },
+  reports:         { render: renderReports,         init: initReports               },
+  profile:         { render: renderProfile,         init: initProfile               },
+  'admin-setup':   { render: renderAdmin,           init: initAdmin                 },
+  expenses:        { render: renderExpenses,        init: initExpenses              },
+  purchases:       { render: renderPurchases,       init: initPurchases             },
+  reconciliation:  { render: renderReconciliation,  init: initReconciliation        },
 };
 
 export function navigate(page, params = {}) {

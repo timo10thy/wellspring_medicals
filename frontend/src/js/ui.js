@@ -37,18 +37,17 @@ export function logoHTML() {
 }
 
 export function renderSidebar(activePage) {
-  const user    = auth.user();
-  const isAdmin = auth.isAdmin();
+  const user = auth.user();
 
   const navItems = [
-    { page: 'dashboard',      icon: icons.grid,     label: 'Dashboard'                          },
+    { page: 'dashboard',      icon: icons.grid,     label: 'Dashboard'                              },
     { page: 'sales',          icon: icons.cart,     label: 'Sales',          roles: ['ADMIN','USER'] },
     { page: 'products',       icon: icons.box,      label: 'Products',       roles: ['ADMIN']        },
     { page: 'stock',          icon: icons.stack,    label: 'Stock',          roles: ['ADMIN']        },
+    { page: 'reconciliation', icon: icons.recon,    label: 'Reconciliation', roles: ['ADMIN']        },
     { page: 'expenses',       icon: icons.wallet,   label: 'Expenses',       roles: ['ADMIN']        },
     { page: 'purchases',      icon: icons.shopping, label: 'Purchases',      roles: ['ADMIN']        },
     { page: 'reports',        icon: icons.chart,    label: 'Reports',        roles: ['ADMIN']        },
-    { page: 'reconciliation', icon: icons.recon,    label: 'Reconciliation', roles: ['ADMIN']        },
     { page: 'profile',        icon: icons.user,     label: 'Profile',        roles: ['ADMIN','USER'] },
   ];
 
@@ -60,34 +59,20 @@ export function renderSidebar(activePage) {
       </a>`).join('');
 
   return `
-    <!-- Mobile overlay backdrop -->
     <div id="sidebar-overlay" style="
-      display:none;
-      position:fixed;
-      inset:0;
-      background:rgba(0,0,0,0.5);
-      z-index:99;
+      display:none;position:fixed;inset:0;
+      background:rgba(0,0,0,0.5);z-index:99;
     "></div>
 
     <aside class="sidebar" id="sidebar" style="
-      position:fixed;
-      top:0; left:0; bottom:0;
-      z-index:100;
-      transform:translateX(-100%);
-      transition:transform 0.25s ease;
-      width:220px;
+      position:fixed;top:0;left:0;bottom:0;z-index:100;
+      transform:translateX(-100%);transition:transform 0.25s ease;width:220px;
     ">
       <div style="padding:20px 16px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);">
         ${logoHTML()}
-        <!-- Close button — mobile only -->
         <button id="sidebar-close-btn" style="
-          margin-left:auto;
-          background:none;
-          border:none;
-          color:var(--muted);
-          cursor:pointer;
-          padding:4px;
-          display:none;
+          margin-left:auto;background:none;border:none;
+          color:var(--muted);cursor:pointer;padding:4px;display:none;
         ">${icons.close}</button>
       </div>
       <nav style="flex:1;padding:12px 0;overflow-y:auto;">${navHTML}</nav>
@@ -111,18 +96,10 @@ export function renderSidebar(activePage) {
 export function renderTopbar(title, subtitle = '') {
   return `
     <header class="topbar" style="display:flex;align-items:center;gap:12px;">
-      <!-- Hamburger button -->
       <button id="hamburger-btn" style="
-        background:none;
-        border:none;
-        color:var(--text);
-        cursor:pointer;
-        padding:6px;
-        border-radius:6px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        flex-shrink:0;
+        background:none;border:none;color:var(--text);cursor:pointer;
+        padding:6px;border-radius:6px;display:flex;align-items:center;
+        justify-content:center;flex-shrink:0;
       ">${icons.hamburger}</button>
       <div>
         <div style="font-family:var(--font-head);font-size:18px;color:var(--text)">${title}</div>
