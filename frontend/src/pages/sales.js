@@ -3,6 +3,12 @@ import { renderSidebar, renderTopbar, bindSidebar,
          openModal, closeModal, bindModalClose,
          fmt, fmtDateTime, icons }                 from '../js/ui.js';
 
+// ── Admin check ───────────────────────────────────────────────────────────────
+function isAdmin() {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  return user.role === 'ADMIN';
+}
+
 // Render
 export function renderSales() {
   return `
@@ -82,17 +88,40 @@ export function renderSales() {
       </div>
 
     </div>
+  </div>
+
+  <!-- ── Void Modal ── -->
+  <div id="void-modal" class="modal-backdrop">
+    <div class="modal" style="max-width:400px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="font-family:var(--font-head);font-size:18px;color:#dc2626;">Void Sale</h2>
+        <button data-close-modal class="btn btn-ghost" style="padding:6px 10px;">${icons.x}</button>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+        This will reverse the sale and restore stock. This cannot be undone.
+      </p>
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;">Reason (optional)</label>
+      <input class="field-input" id="void-reason" placeholder="e.g. Customer returned item"
+        style="width:100%;margin-bottom:18px;box-sizing:border-box;"/>
+      <div id="void-error" class="banner banner-error"><span></span></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+        <button data-close-modal class="btn btn-ghost">Cancel</button>
+        <button id="void-confirm-btn" class="btn btn-primary"
+          style="background:#dc2626;border-color:#dc2626;">Confirm Void</button>
+      </div>
+    </div>
   </div>`;
 }
 
 // ── Cart state ────────────────────────────────────────────────────────────────
-// Each entry: { product_id, product_name, stock_id, selling_price, available_qty, qty }
 let cart = [];
+let pendingVoidSaleId = null;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 export function initSales() {
   bindSidebar();
   bindModalClose('new-sale-modal');
+  bindModalClose('void-modal');
 
   document.getElementById('new-sale-btn')?.addEventListener('click', () => {
     resetSaleModal();
@@ -111,8 +140,32 @@ export function initSales() {
     if (!id || id < 1) return;
     fetchReceipt(id);
   });
+
   document.getElementById('receipt-id')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') document.getElementById('receipt-btn')?.click();
+  });
+
+  // ── Void confirm ──
+  document.getElementById('void-confirm-btn')?.addEventListener('click', async () => {
+    const btn   = document.getElementById('void-confirm-btn');
+    const errEl = document.getElementById('void-error');
+    const reason = document.getElementById('void-reason').value.trim();
+
+    errEl.classList.remove('show');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Voiding…';
+
+    try {
+      await api.delete(`/sales/${pendingVoidSaleId}/void`, { reason });
+      closeModal('void-modal');
+      fetchReceipt(pendingVoidSaleId); // refresh receipt to show voided state
+    } catch (err) {
+      errEl.querySelector('span').textContent = err.message;
+      errEl.classList.add('show');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Confirm Void';
+    }
   });
 }
 
@@ -125,6 +178,14 @@ function resetSaleModal() {
   document.getElementById('ns-error').classList.remove('show');
   document.getElementById('ns-success').classList.remove('show');
   renderCart();
+}
+
+// ── Void modal ────────────────────────────────────────────────────────────────
+function openVoidModal(saleId) {
+  pendingVoidSaleId = saleId;
+  document.getElementById('void-reason').value = '';
+  document.getElementById('void-error').classList.remove('show');
+  openModal('void-modal');
 }
 
 // ── Search product ────────────────────────────────────────────────────────────
@@ -197,12 +258,9 @@ async function addToCart(productId, productName, availableQty) {
   const errEl = document.getElementById('ns-error');
   errEl.classList.remove('show');
 
-  // If already in cart, just bump qty by 1 (capped at available)
   const existing = cart.find(i => i.product_id === productId);
   if (existing) {
-    if (existing.qty < existing.available_qty) {
-      existing.qty += 1;
-    }
+    if (existing.qty < existing.available_qty) existing.qty += 1;
     renderCart();
     document.getElementById('ns-search-results').style.display = 'none';
     document.getElementById('ns-product-search').value = '';
@@ -219,7 +277,7 @@ async function addToCart(productId, productName, availableQty) {
       stock_id:      stockData.id,
       selling_price: parseFloat(details.price),
       available_qty: availableQty,
-      qty:           1,               // always start at 1, never default to full stock
+      qty:           1,
     });
 
     renderCart();
@@ -235,9 +293,9 @@ async function addToCart(productId, productName, availableQty) {
 
 // ── Render cart ───────────────────────────────────────────────────────────────
 function renderCart() {
-  const cartSection  = document.getElementById('cart-section');
-  const emptyHint    = document.getElementById('cart-empty-hint');
-  const cartItemsEl  = document.getElementById('cart-items');
+  const cartSection = document.getElementById('cart-section');
+  const emptyHint   = document.getElementById('cart-empty-hint');
+  const cartItemsEl = document.getElementById('cart-items');
 
   if (!cart.length) {
     cartSection.style.display = 'none';
@@ -272,10 +330,7 @@ function renderCart() {
       </div>
     </div>`).join('');
 
-  // ── Qty input: use 'change' + 'blur' so user can type freely (e.g. "13")
-  // without each keystroke clamping the value mid-type.
   cartItemsEl.querySelectorAll('.cart-qty-input').forEach(input => {
-    // Live feedback: just update total while typing without clamping
     input.addEventListener('input', () => {
       const idx = parseInt(input.dataset.idx);
       const raw = parseInt(input.value);
@@ -285,26 +340,21 @@ function renderCart() {
       }
     });
 
-    // Clamp and enforce limits only when user leaves the field
     input.addEventListener('blur', () => {
       const idx = parseInt(input.dataset.idx);
       let val   = parseInt(input.value);
-
       if (isNaN(val) || val < 1) val = 1;
       if (val > cart[idx].available_qty) val = cart[idx].available_qty;
-
       cart[idx].qty = val;
       input.value   = val;
       updateGrandTotal();
     });
 
-    // Also clamp on Enter key
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') input.blur();
     });
   });
 
-  // Bind remove buttons
   cartItemsEl.querySelectorAll('.remove-cart-item').forEach(btn => {
     btn.addEventListener('click', () => {
       cart.splice(parseInt(btn.dataset.idx), 1);
@@ -336,7 +386,6 @@ async function submitSale() {
     return;
   }
 
-  // Validate all quantities before submitting
   const invalid = cart.find(i => !i.qty || i.qty < 1);
   if (invalid) {
     errEl.querySelector('span').textContent = `Quantity for "${invalid.product_name}" must be at least 1.`;
@@ -357,9 +406,8 @@ async function submitSale() {
     });
 
     sucMsg.innerHTML = `Sale recorded! Receipt #${receipt.receipt_id} — Total: ₦${fmt(receipt.grand_total)}
-      <span style="color:var(--accent-lt);cursor:pointer;text-decoration:underline;margin-left:8px;" id="view-receipt-link">
-        View Receipt
-      </span>`;
+      <span style="color:var(--accent-lt);cursor:pointer;text-decoration:underline;margin-left:8px;"
+        id="view-receipt-link">View Receipt</span>`;
     sucEl.classList.add('show');
     cart = [];
     renderCart();
@@ -394,7 +442,9 @@ async function fetchReceipt(id) {
       <div class="card" style="padding:18px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
           <div style="font-family:var(--font-head);font-size:16px;color:var(--text)">Receipt #${r.receipt_id}</div>
-          <span class="badge badge-green">Completed</span>
+          ${r.is_voided
+            ? `<span class="badge badge-red">Voided</span>`
+            : `<span class="badge badge-green">Completed</span>`}
         </div>
         ${receiptRow('Sold By', r.sold_by)}
         ${receiptRow('Date',    fmtDateTime(r.created_at))}
@@ -419,7 +469,28 @@ async function fetchReceipt(id) {
             ₦${fmt(r.grand_total)}
           </strong>
         </div>
+
+        ${r.is_voided
+          ? `<div style="margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;
+                         border-radius:8px;color:#dc2626;font-size:13px;font-weight:500;">
+               ⚠ Voided${r.voided_by ? ` by ${r.voided_by}` : ''}${r.void_reason ? ` — "${r.void_reason}"` : ''}
+             </div>`
+          : (isAdmin()
+              ? `<div style="margin-top:14px;display:flex;justify-content:flex-end;">
+                   <button id="void-btn-${id}" class="btn btn-ghost"
+                     style="color:#f87171;border-color:#f87171;font-size:12px;padding:6px 14px;">
+                     Void Sale
+                   </button>
+                 </div>`
+              : '')
+        }
       </div>`;
+
+    // Bind void button after render
+    if (!r.is_voided && isAdmin()) {
+      document.getElementById(`void-btn-${id}`)?.addEventListener('click', () => openVoidModal(id));
+    }
+
   } catch (err) {
     container.innerHTML = `<div style="color:#f87171;font-size:13px;">${err.message}</div>`;
   }
