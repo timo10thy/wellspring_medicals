@@ -1,17 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from typing import Annotated, Optional
 from sqlalchemy import func
 from pydantic import BaseModel
-from typing import Optional
-from app.database import get_db
+from app.routes.basemodel import get_db
 from app.models.void_request import VoidRequest
 from app.models.sales import Sales
 from app.models.stock import Stocks
-from app.auth import get_current_user, admin_validation
+from app.middlewares.auth import AuthMiddleware
+from app.middlewares.admin import admin_validation
+from app.models.users import User
 import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sales", tags=["Void Requests"])
+
+db_dependency = Annotated[Session, Depends(get_db)]
 
 
 class VoidRequestCreate(BaseModel):
@@ -19,16 +23,16 @@ class VoidRequestCreate(BaseModel):
 
 
 class VoidReviewRequest(BaseModel):
-    reason: Optional[str] = None  # optional rejection note
+    reason: Optional[str] = None
 
 
-# ── Staff: submit void request ────────────────────────────────────────────────
+# ── Any staff: submit void request ────────────────────────────────────────────
 @router.post("/{sale_id}/void-request")
 def request_void(
     sale_id: int,
     body: VoidRequestCreate,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: db_dependency,
+    current_user: User = Depends(AuthMiddleware),
 ):
     sale = db.query(Sales).filter(Sales.id == sale_id).first()
     if not sale:
@@ -36,7 +40,6 @@ def request_void(
     if sale.is_voided:
         raise HTTPException(status_code=400, detail="Sale is already voided")
 
-    # Check no pending request already exists
     existing = db.query(VoidRequest).filter(
         VoidRequest.sale_id == sale_id,
         VoidRequest.status == 'pending'
@@ -60,8 +63,8 @@ def request_void(
 # ── Admin: get all pending void requests ──────────────────────────────────────
 @router.get("/void-requests")
 def get_void_requests(
-    db: Session = Depends(get_db),
-    current_user=Depends(admin_validation),
+    db: db_dependency,
+    current_admin: User = Depends(admin_validation),
 ):
     requests = (
         db.query(VoidRequest)
@@ -69,7 +72,6 @@ def get_void_requests(
         .order_by(VoidRequest.created_at.desc())
         .all()
     )
-
     result = []
     for vr in requests:
         sale = vr.sale
@@ -89,8 +91,8 @@ def get_void_requests(
 @router.patch("/void-requests/{request_id}/approve")
 def approve_void(
     request_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(admin_validation),
+    db: db_dependency,
+    current_admin: User = Depends(admin_validation),
 ):
     vr = db.query(VoidRequest).filter(VoidRequest.id == request_id).first()
     if not vr:
@@ -104,24 +106,21 @@ def approve_void(
     if sale.is_voided:
         raise HTTPException(status_code=400, detail="Sale is already voided")
 
-    # Restore stock
     stock = db.query(Stocks).filter(Stocks.id == sale.stock_id).first()
     if stock:
         stock.quantity += sale.quantity_sold
 
-    # Soft void the sale
     sale.is_voided   = True
     sale.void_reason = vr.reason
-    sale.voided_by   = current_user.username
+    sale.voided_by   = current_admin.username
     sale.voided_at   = func.now()
 
-    # Mark request approved
     vr.status      = 'approved'
-    vr.reviewed_by = current_user.username
+    vr.reviewed_by = current_admin.username
     vr.reviewed_at = func.now()
 
     db.commit()
-    logger.info(f"Void request {request_id} approved by {current_user.username} for sale {vr.sale_id}")
+    logger.info(f"Void request {request_id} approved by {current_admin.username} for sale {vr.sale_id}")
     return {"message": "Void approved. Stock restored.", "sale_id": vr.sale_id}
 
 
@@ -130,8 +129,8 @@ def approve_void(
 def reject_void(
     request_id: int,
     body: VoidReviewRequest,
-    db: Session = Depends(get_db),
-    current_user=Depends(admin_validation),
+    db: db_dependency,
+    current_admin: User = Depends(admin_validation),
 ):
     vr = db.query(VoidRequest).filter(VoidRequest.id == request_id).first()
     if not vr:
@@ -140,11 +139,11 @@ def reject_void(
         raise HTTPException(status_code=400, detail=f"Request is already {vr.status}")
 
     vr.status      = 'rejected'
-    vr.reviewed_by = current_user.username
+    vr.reviewed_by = current_admin.username
     vr.reviewed_at = func.now()
     if body.reason:
         vr.reason = f"{vr.reason or ''} | Rejected: {body.reason}".strip(' |')
 
     db.commit()
-    logger.info(f"Void request {request_id} rejected by {current_user.username}")
+    logger.info(f"Void request {request_id} rejected by {current_admin.username}")
     return {"message": "Void request rejected", "sale_id": vr.sale_id}
