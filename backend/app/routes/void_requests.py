@@ -49,14 +49,14 @@ def request_void(
 
     void_req = VoidRequest(
         sale_id=sale_id,
-        requested_by=current_user.username,
+        requested_by=current_user.user_name,
         reason=body.reason,
         status='pending',
     )
     db.add(void_req)
     db.commit()
     db.refresh(void_req)
-    logger.info(f"Void request submitted for sale {sale_id} by {current_user.username}")
+    logger.info(f"Void request submitted for sale {sale_id} by {current_user.user_name}")
     return {"message": "Void request submitted", "void_request_id": void_req.id}
 
 
@@ -112,15 +112,15 @@ def approve_void(
 
     sale.is_voided   = True
     sale.void_reason = vr.reason
-    sale.voided_by   = current_admin.username
+    sale.voided_by   = current_admin.user_name
     sale.voided_at   = func.now()
 
     vr.status      = 'approved'
-    vr.reviewed_by = current_admin.username
+    vr.reviewed_by = current_admin.user_name
     vr.reviewed_at = func.now()
 
     db.commit()
-    logger.info(f"Void request {request_id} approved by {current_admin.username} for sale {vr.sale_id}")
+    logger.info(f"Void request {request_id} approved by {current_admin.user_name} for sale {vr.sale_id}")
     return {"message": "Void approved. Stock restored.", "sale_id": vr.sale_id}
 
 
@@ -139,11 +139,11 @@ def reject_void(
         raise HTTPException(status_code=400, detail=f"Request is already {vr.status}")
 
     vr.status      = 'rejected'
-    vr.reviewed_by = current_admin.username
+    vr.reviewed_by = current_admin.user_name
     vr.reviewed_at = func.now()
     if body.reason:
         vr.reason = f"{vr.reason or ''} | Rejected: {body.reason}".strip(' |')
 
     db.commit()
-    logger.info(f"Void request {request_id} rejected by {current_admin.username}")
+    logger.info(f"Void request {request_id} rejected by {current_admin.user_name}")
     return {"message": "Void request rejected", "sale_id": vr.sale_id}
