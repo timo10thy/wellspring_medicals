@@ -3,6 +3,7 @@ from sqlalchemy.orm import relationship
 from app.models.base import Base
 
 
+
 class PurchaseReceiptItem(Base):
     __tablename__ = 'purchase_receipt_items'
 

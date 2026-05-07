@@ -3,13 +3,17 @@ import { renderSidebar, renderTopbar, bindSidebar,
          openModal, closeModal, bindModalClose,
          fmt, fmtDateTime, icons }                 from '../js/ui.js';
 
-// ── Admin check ───────────────────────────────────────────────────────────────
+// ── Auth helpers ──────────────────────────────────────────────────────────────
 function isAdmin() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   return user.role === 'ADMIN';
 }
+function currentUsername() {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  return user.username || '';
+}
 
-// Render
+// ── Render ────────────────────────────────────────────────────────────────────
 export function renderSales() {
   return `
   <div class="page-enter app-layout">
@@ -22,6 +26,16 @@ export function renderSales() {
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
           <p style="font-size:13px;color:var(--muted)">Record a new sale or look up an existing receipt.</p>
           <button id="new-sale-btn" class="btn btn-primary">${icons.plus} New Sale</button>
+        </div>
+
+        <!-- Admin: Pending Void Requests -->
+        <div id="void-requests-section" style="display:none;margin-bottom:24px;">
+          <div class="card" style="padding:20px;">
+            <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:14px;">
+              ⚠ Pending Void Requests
+            </div>
+            <div id="void-requests-list"></div>
+          </div>
         </div>
 
         <!-- Receipt lookup -->
@@ -39,7 +53,7 @@ export function renderSales() {
     </div>
   </div>
 
-  <!-- ── New Sale Modal (Cart Style) ── -->
+  <!-- ── New Sale Modal ── -->
   <div id="new-sale-modal" class="modal-backdrop">
     <div class="modal" style="max-width:620px;max-height:92vh;overflow-y:auto;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
@@ -50,7 +64,6 @@ export function renderSales() {
       <div id="ns-error"   class="banner banner-error"><span></span></div>
       <div id="ns-success" class="banner banner-success"><span id="ns-success-msg">Sale recorded!</span></div>
 
-      <!-- Product search -->
       <div style="display:flex;gap:8px;margin-bottom:14px;">
         <input class="field-input" id="ns-product-search" type="text"
           placeholder="Search product name to add…" style="flex:1;"/>
@@ -58,39 +71,53 @@ export function renderSales() {
       </div>
       <p class="field-hint hint-error" id="ns-search-hint" style="margin-bottom:8px;"></p>
 
-      <!-- Search results -->
       <div id="ns-search-results" style="display:none;margin-bottom:16px;">
         <div id="ns-results-list" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;"></div>
       </div>
 
-      <!-- Cart -->
       <div id="cart-section" style="display:none;">
         <div style="font-size:12px;font-weight:500;color:var(--muted);margin-bottom:8px;">CART</div>
         <div id="cart-items" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
-
-        <!-- Grand total -->
         <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:14px;margin-bottom:16px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <span style="font-size:12px;color:var(--muted);">Grand Total</span>
             <span id="cart-grand-total" style="font-family:var(--font-head);font-size:26px;color:var(--accent-lt);">₦0.00</span>
           </div>
         </div>
-
         <div style="display:flex;gap:10px;justify-content:flex-end;">
           <button type="button" data-close-modal class="btn btn-ghost">Cancel</button>
           <button id="ns-submit" class="btn btn-primary">Record Sale</button>
         </div>
       </div>
 
-      <!-- Empty cart hint -->
       <div id="cart-empty-hint" style="text-align:center;padding:24px 0;color:var(--muted);font-size:13px;">
         Search for products above to add them to the cart.
       </div>
-
     </div>
   </div>
 
-  <!-- ── Void Modal ── -->
+  <!-- ── Void Request Modal (staff) ── -->
+  <div id="void-request-modal" class="modal-backdrop">
+    <div class="modal" style="max-width:400px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="font-family:var(--font-head);font-size:18px;color:var(--text);">Request Void</h2>
+        <button data-close-modal class="btn btn-ghost" style="padding:6px 10px;">${icons.x}</button>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
+        Submit a void request for admin approval. Stock will only be restored after approval.
+      </p>
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;">Reason (optional)</label>
+      <input class="field-input" id="void-request-reason" placeholder="e.g. Customer returned item"
+        style="width:100%;margin-bottom:18px;box-sizing:border-box;"/>
+      <div id="void-request-error" class="banner banner-error"><span></span></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+        <button data-close-modal class="btn btn-ghost">Cancel</button>
+        <button id="void-request-confirm-btn" class="btn btn-primary">Submit Request</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Admin Void Modal (instant) ── -->
   <div id="void-modal" class="modal-backdrop">
     <div class="modal" style="max-width:400px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
@@ -98,7 +125,7 @@ export function renderSales() {
         <button data-close-modal class="btn btn-ghost" style="padding:6px 10px;">${icons.x}</button>
       </div>
       <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">
-        This will reverse the sale and restore stock. This cannot be undone.
+        This will immediately reverse the sale and restore stock. Cannot be undone.
       </p>
       <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;">Reason (optional)</label>
       <input class="field-input" id="void-reason" placeholder="e.g. Customer returned item"
@@ -110,18 +137,39 @@ export function renderSales() {
           style="background:#dc2626;border-color:#dc2626;">Confirm Void</button>
       </div>
     </div>
+  </div>
+
+  <!-- ── Reject Void Request Modal (admin) ── -->
+  <div id="reject-modal" class="modal-backdrop">
+    <div class="modal" style="max-width:400px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="font-family:var(--font-head);font-size:18px;color:var(--text);">Reject Void Request</h2>
+        <button data-close-modal class="btn btn-ghost" style="padding:6px 10px;">${icons.x}</button>
+      </div>
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;">Reason (optional)</label>
+      <input class="field-input" id="reject-reason" placeholder="e.g. Sale is valid"
+        style="width:100%;margin-bottom:18px;box-sizing:border-box;"/>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button data-close-modal class="btn btn-ghost">Cancel</button>
+        <button id="reject-confirm-btn" class="btn btn-primary"
+          style="background:#dc2626;border-color:#dc2626;">Confirm Reject</button>
+      </div>
+    </div>
   </div>`;
 }
 
-// ── Cart state ────────────────────────────────────────────────────────────────
-let cart = [];
-let pendingVoidSaleId = null;
+// ── State ─────────────────────────────────────────────────────────────────────
+let cart               = [];
+let pendingVoidSaleId  = null;
+let pendingVoidReqId   = null; // for admin approve/reject
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 export function initSales() {
   bindSidebar();
   bindModalClose('new-sale-modal');
   bindModalClose('void-modal');
+  bindModalClose('void-request-modal');
+  bindModalClose('reject-modal');
 
   document.getElementById('new-sale-btn')?.addEventListener('click', () => {
     resetSaleModal();
@@ -140,25 +188,23 @@ export function initSales() {
     if (!id || id < 1) return;
     fetchReceipt(id);
   });
-
   document.getElementById('receipt-id')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') document.getElementById('receipt-btn')?.click();
   });
 
-  // ── Void confirm ──
+  // ── Admin instant void confirm ──
   document.getElementById('void-confirm-btn')?.addEventListener('click', async () => {
-    const btn   = document.getElementById('void-confirm-btn');
-    const errEl = document.getElementById('void-error');
+    const btn    = document.getElementById('void-confirm-btn');
+    const errEl  = document.getElementById('void-error');
     const reason = document.getElementById('void-reason').value.trim();
-
     errEl.classList.remove('show');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Voiding…';
-
     try {
       await api.delete(`/sales/${pendingVoidSaleId}/void`, { reason });
       closeModal('void-modal');
-      fetchReceipt(pendingVoidSaleId); // refresh receipt to show voided state
+      fetchReceipt(pendingVoidSaleId);
+      if (isAdmin()) loadVoidRequests();
     } catch (err) {
       errEl.querySelector('span').textContent = err.message;
       errEl.classList.add('show');
@@ -167,6 +213,117 @@ export function initSales() {
       btn.innerHTML = 'Confirm Void';
     }
   });
+
+  // ── Staff void request confirm ──
+  document.getElementById('void-request-confirm-btn')?.addEventListener('click', async () => {
+    const btn    = document.getElementById('void-request-confirm-btn');
+    const errEl  = document.getElementById('void-request-error');
+    const reason = document.getElementById('void-request-reason').value.trim();
+    errEl.classList.remove('show');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Submitting…';
+    try {
+      await api.post(`/sales/${pendingVoidSaleId}/void-request`, { reason });
+      closeModal('void-request-modal');
+      fetchReceipt(pendingVoidSaleId);
+    } catch (err) {
+      errEl.querySelector('span').textContent = err.message;
+      errEl.classList.add('show');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Submit Request';
+    }
+  });
+
+  // ── Admin reject confirm ──
+  document.getElementById('reject-confirm-btn')?.addEventListener('click', async () => {
+    const btn    = document.getElementById('reject-confirm-btn');
+    const reason = document.getElementById('reject-reason').value.trim();
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Rejecting…';
+    try {
+      await api.patch(`/sales/void-requests/${pendingVoidReqId}/reject`, { reason });
+      closeModal('reject-modal');
+      loadVoidRequests();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Confirm Reject';
+    }
+  });
+
+  // Load pending void requests for admins
+  if (isAdmin()) loadVoidRequests();
+}
+
+// ── Load pending void requests (admin) ───────────────────────────────────────
+async function loadVoidRequests() {
+  const section = document.getElementById('void-requests-section');
+  const listEl  = document.getElementById('void-requests-list');
+  try {
+    const data = await api.get('/sales/void-requests');
+    if (!data.length) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = 'block';
+    listEl.innerHTML = data.map(vr => `
+      <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;
+                  padding:12px 14px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div>
+            <div style="font-size:13px;font-weight:500;color:var(--text);">
+              Sale #${vr.sale_id} — ₦${fmt(vr.total_amount)}
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">
+              Requested by <strong>${vr.requested_by}</strong> · ${vr.created_at?.slice(0,10)}
+            </div>
+            ${vr.reason ? `<div style="font-size:12px;color:var(--text);margin-top:4px;">
+              Reason: "${vr.reason}"</div>` : ''}
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost approve-void-btn" data-req-id="${vr.void_request_id}" data-sale-id="${vr.sale_id}"
+              style="font-size:12px;color:#16a34a;border-color:#16a34a;">
+              ✓ Approve
+            </button>
+            <button class="btn btn-ghost reject-void-btn" data-req-id="${vr.void_request_id}"
+              style="font-size:12px;color:#dc2626;border-color:#dc2626;">
+              ✕ Reject
+            </button>
+          </div>
+        </div>
+      </div>`).join('');
+
+    // Bind approve
+    listEl.querySelectorAll('.approve-void-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm(`Approve void for Sale #${btn.dataset.saleId}? Stock will be restored.`)) return;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span>';
+        try {
+          await api.patch(`/sales/void-requests/${btn.dataset.reqId}/approve`);
+          loadVoidRequests();
+        } catch (err) {
+          alert(err.message);
+          btn.disabled = false;
+          btn.innerHTML = '✓ Approve';
+        }
+      });
+    });
+
+    // Bind reject
+    listEl.querySelectorAll('.reject-void-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        pendingVoidReqId = btn.dataset.reqId;
+        document.getElementById('reject-reason').value = '';
+        openModal('reject-modal');
+      });
+    });
+
+  } catch {
+    section.style.display = 'none';
+  }
 }
 
 function resetSaleModal() {
@@ -180,42 +337,28 @@ function resetSaleModal() {
   renderCart();
 }
 
-// ── Void modal ────────────────────────────────────────────────────────────────
-function openVoidModal(saleId) {
-  pendingVoidSaleId = saleId;
-  document.getElementById('void-reason').value = '';
-  document.getElementById('void-error').classList.remove('show');
-  openModal('void-modal');
-}
-
 // ── Search product ────────────────────────────────────────────────────────────
 async function searchProduct() {
   const query = document.getElementById('ns-product-search').value.trim();
   const hint  = document.getElementById('ns-search-hint');
   const btn   = document.getElementById('ns-search-btn');
-
   if (!query) { hint.textContent = 'Enter a product name to search.'; return; }
   hint.textContent = '';
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner" style="border-top-color:var(--accent)"></span>';
-
   try {
     const results = await api.get(`/stock/total/search?product_name=${encodeURIComponent(query)}`);
     const listEl  = document.getElementById('ns-results-list');
     const resEl   = document.getElementById('ns-search-results');
-
     if (!results.length) {
       hint.textContent = 'No products found.';
       resEl.style.display = 'none';
       return;
     }
-
     resEl.style.display = 'block';
     listEl.innerHTML = results.map(p => `
       <div class="product-result-item"
-        data-id="${p.product_id}"
-        data-name="${p.product_name}"
-        data-qty="${p.total_quantity}"
+        data-id="${p.product_id}" data-name="${p.product_name}" data-qty="${p.total_quantity}"
         style="display:flex;align-items:center;justify-content:space-between;
                padding:10px 12px;background:var(--surface2);border:1px solid var(--border2);
                border-radius:8px;cursor:${p.total_quantity > 0 ? 'pointer' : 'not-allowed'};
@@ -237,14 +380,9 @@ async function searchProduct() {
       item.addEventListener('click', () => {
         const qty = parseInt(item.getAttribute('data-qty'));
         if (qty <= 0) return;
-        addToCart(
-          parseInt(item.getAttribute('data-id')),
-          item.getAttribute('data-name'),
-          qty
-        );
+        addToCart(parseInt(item.getAttribute('data-id')), item.getAttribute('data-name'), qty);
       });
     });
-
   } catch (err) {
     hint.textContent = err.message;
   } finally {
@@ -257,7 +395,6 @@ async function searchProduct() {
 async function addToCart(productId, productName, availableQty) {
   const errEl = document.getElementById('ns-error');
   errEl.classList.remove('show');
-
   const existing = cart.find(i => i.product_id === productId);
   if (existing) {
     if (existing.qty < existing.available_qty) existing.qty += 1;
@@ -266,11 +403,9 @@ async function addToCart(productId, productName, availableQty) {
     document.getElementById('ns-product-search').value = '';
     return;
   }
-
   try {
     const details   = await api.get(`/product/${productId}/details`);
     const stockData = await api.get(`/stock/by-product/${productId}`);
-
     cart.push({
       product_id:    productId,
       product_name:  productName,
@@ -279,12 +414,10 @@ async function addToCart(productId, productName, availableQty) {
       available_qty: availableQty,
       qty:           1,
     });
-
     renderCart();
     document.getElementById('ns-search-results').style.display = 'none';
     document.getElementById('ns-product-search').value = '';
     document.getElementById('ns-search-hint').textContent = '';
-
   } catch (err) {
     errEl.querySelector('span').textContent = err.message;
     errEl.classList.add('show');
@@ -296,16 +429,13 @@ function renderCart() {
   const cartSection = document.getElementById('cart-section');
   const emptyHint   = document.getElementById('cart-empty-hint');
   const cartItemsEl = document.getElementById('cart-items');
-
   if (!cart.length) {
     cartSection.style.display = 'none';
     emptyHint.style.display   = 'block';
     return;
   }
-
   cartSection.style.display = 'block';
   emptyHint.style.display   = 'none';
-
   cartItemsEl.innerHTML = cart.map((item, idx) => `
     <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -339,20 +469,16 @@ function renderCart() {
         updateGrandTotal();
       }
     });
-
     input.addEventListener('blur', () => {
       const idx = parseInt(input.dataset.idx);
-      let val   = parseInt(input.value);
+      let val = parseInt(input.value);
       if (isNaN(val) || val < 1) val = 1;
       if (val > cart[idx].available_qty) val = cart[idx].available_qty;
       cart[idx].qty = val;
       input.value   = val;
       updateGrandTotal();
     });
-
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') input.blur();
-    });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
   });
 
   cartItemsEl.querySelectorAll('.remove-cart-item').forEach(btn => {
@@ -376,26 +502,21 @@ async function submitSale() {
   const sucEl  = document.getElementById('ns-success');
   const sucMsg = document.getElementById('ns-success-msg');
   const btn    = document.getElementById('ns-submit');
-
   errEl.classList.remove('show');
   sucEl.classList.remove('show');
-
   if (!cart.length) {
     errEl.querySelector('span').textContent = 'Add at least one product to the cart.';
     errEl.classList.add('show');
     return;
   }
-
   const invalid = cart.find(i => !i.qty || i.qty < 1);
   if (invalid) {
     errEl.querySelector('span').textContent = `Quantity for "${invalid.product_name}" must be at least 1.`;
     errEl.classList.add('show');
     return;
   }
-
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Processing…';
-
   try {
     const receipt = await api.post('/sales/create', {
       items: cart.map(i => ({
@@ -404,14 +525,12 @@ async function submitSale() {
         selling_price: i.selling_price,
       })),
     });
-
     sucMsg.innerHTML = `Sale recorded! Receipt #${receipt.receipt_id} — Total: ₦${fmt(receipt.grand_total)}
       <span style="color:var(--accent-lt);cursor:pointer;text-decoration:underline;margin-left:8px;"
         id="view-receipt-link">View Receipt</span>`;
     sucEl.classList.add('show');
     cart = [];
     renderCart();
-
     setTimeout(() => {
       document.getElementById('view-receipt-link')?.addEventListener('click', () => {
         closeModal('new-sale-modal');
@@ -419,7 +538,6 @@ async function submitSale() {
         fetchReceipt(receipt.receipt_id);
       });
     }, 50);
-
   } catch (err) {
     errEl.querySelector('span').textContent = err.message;
     errEl.classList.add('show');
@@ -435,19 +553,52 @@ async function fetchReceipt(id) {
   container.style.display = 'block';
   container.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;">
     <span class="spinner" style="border-top-color:var(--accent)"></span> Loading receipt…</div>`;
-
   try {
     const r = await api.get(`/sales/${id}/salesreceipt`);
+
+    // Badge
+    let badge = `<span class="badge badge-green">Completed</span>`;
+    if (r.is_voided)    badge = `<span class="badge badge-red">Voided</span>`;
+    else if (r.void_pending) badge = `<span class="badge" style="background:#fef3c7;color:#92400e;">Void Pending</span>`;
+
+    // Action buttons
+    let actionHtml = '';
+    if (!r.is_voided && !r.void_pending) {
+      if (isAdmin()) {
+        actionHtml = `
+          <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+            <button id="void-btn-${id}" class="btn btn-ghost"
+              style="color:#f87171;border-color:#f87171;font-size:12px;padding:6px 14px;">
+              Void Sale
+            </button>
+          </div>`;
+      } else {
+        actionHtml = `
+          <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
+            <button id="void-request-btn-${id}" class="btn btn-ghost"
+              style="font-size:12px;padding:6px 14px;">
+              Request Void
+            </button>
+          </div>`;
+      }
+    }
+
+    if (r.void_pending && isAdmin()) {
+      actionHtml = `
+        <div style="margin-top:12px;padding:10px 14px;background:#fef3c7;border:1px solid #fde68a;
+                    border-radius:8px;font-size:13px;color:#92400e;">
+          ⏳ A void request is pending admin approval.
+        </div>`;
+    }
+
     container.innerHTML = `
       <div class="card" style="padding:18px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
           <div style="font-family:var(--font-head);font-size:16px;color:var(--text)">Receipt #${r.receipt_id}</div>
-          ${r.is_voided
-            ? `<span class="badge badge-red">Voided</span>`
-            : `<span class="badge badge-green">Completed</span>`}
+          ${badge}
         </div>
         ${receiptRow('Sold By', r.sold_by)}
-        ${receiptRow('Date',    fmtDateTime(r.created_at))}
+        ${receiptRow('Date', fmtDateTime(r.created_at))}
 
         <div style="margin:14px 0 10px;font-size:12px;font-weight:500;color:var(--muted);">ITEMS</div>
         ${r.items.map(item => `
@@ -470,26 +621,29 @@ async function fetchReceipt(id) {
           </strong>
         </div>
 
-        ${r.is_voided
-          ? `<div style="margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;
-                         border-radius:8px;color:#dc2626;font-size:13px;font-weight:500;">
-               ⚠ Voided${r.voided_by ? ` by ${r.voided_by}` : ''}${r.void_reason ? ` — "${r.void_reason}"` : ''}
-             </div>`
-          : (isAdmin()
-              ? `<div style="margin-top:14px;display:flex;justify-content:flex-end;">
-                   <button id="void-btn-${id}" class="btn btn-ghost"
-                     style="color:#f87171;border-color:#f87171;font-size:12px;padding:6px 14px;">
-                     Void Sale
-                   </button>
-                 </div>`
-              : '')
-        }
+        ${r.is_voided ? `
+          <div style="margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;
+                       border-radius:8px;color:#dc2626;font-size:13px;font-weight:500;">
+            ⚠ Voided${r.voided_by ? ` by ${r.voided_by}` : ''}${r.void_reason ? ` — "${r.void_reason}"` : ''}
+          </div>` : ''}
+
+        ${actionHtml}
       </div>`;
 
-    // Bind void button after render
-    if (!r.is_voided && isAdmin()) {
-      document.getElementById(`void-btn-${id}`)?.addEventListener('click', () => openVoidModal(id));
-    }
+    // Bind buttons after render
+    document.getElementById(`void-btn-${id}`)?.addEventListener('click', () => {
+      pendingVoidSaleId = id;
+      document.getElementById('void-reason').value = '';
+      document.getElementById('void-error').classList.remove('show');
+      openModal('void-modal');
+    });
+
+    document.getElementById(`void-request-btn-${id}`)?.addEventListener('click', () => {
+      pendingVoidSaleId = id;
+      document.getElementById('void-request-reason').value = '';
+      document.getElementById('void-request-error').classList.remove('show');
+      openModal('void-request-modal');
+    });
 
   } catch (err) {
     container.innerHTML = `<div style="color:#f87171;font-size:13px;">${err.message}</div>`;

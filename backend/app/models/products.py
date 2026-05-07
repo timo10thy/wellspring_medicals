@@ -4,6 +4,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Enum, func,Numeric,Boo
 from sqlalchemy.orm import relationship
 
 
+
 class Products(Base):
     __tablename__='products'
     id= Column(Integer, primary_key= True, nullable=False, index=True)

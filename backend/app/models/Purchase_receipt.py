@@ -5,6 +5,7 @@ from app.models.base import Base
 from app.models.enum import PaymentType
 
 
+
 class PurchaseReceipt(Base):
     __tablename__ = 'purchase_receipts'
 

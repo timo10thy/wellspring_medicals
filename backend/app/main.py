@@ -11,12 +11,13 @@ from app.routes.expenses import router as expenses
 from app.routes.purchase_receipt import router as purchase_receipts
 from app.routes.dashboard import router as dashboard
 from app.routes.reports import router as reports
-from app.routes.reconciliation import router as reconciliation   # ← new
+from app.routes.reconciliation import router as reconciliation   
 from app.routes.basemodel import engine
 from app.models.base import Base
+from app.routes.void_requests import router as void_requests_router
 
 # Import new model so create_all picks it up
-from app.models import reconciliation as _recon_model  # noqa
+from app.models import reconciliation as _recon_model  
 
 import logging
 
@@ -60,3 +61,4 @@ app.include_router(purchase_receipts)
 app.include_router(dashboard)
 app.include_router(reports)
 app.include_router(reconciliation)   
+app.include_router(void_requests_router)

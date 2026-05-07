@@ -8,4 +8,4 @@ ExpenseType = SQLEnum('GOODS_PURCHASE', 'OPERATING_EXPENSE','TRANSPORT','RENT','
 
 PaymentType =SQLEnum('CASH','TRANSFER','POS', name='payment_type')
 
-# Other enums can be added here as needed
+
