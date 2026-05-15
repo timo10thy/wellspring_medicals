@@ -21,6 +21,7 @@ export const icons = {
   hamburger:`<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>`,
   close:    `<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
   recon:    `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+  movement: `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`,
 };
 
 export function logoHTML() {
@@ -44,6 +45,7 @@ export function renderSidebar(activePage) {
     { page: 'sales',          icon: icons.cart,     label: 'Sales',          roles: ['ADMIN','USER'] },
     { page: 'products',       icon: icons.box,      label: 'Products',       roles: ['ADMIN']        },
     { page: 'stock',          icon: icons.stack,    label: 'Stock',          roles: ['ADMIN']        },
+    { page: 'stock_movement', icon: icons.movement, label: 'Stock Movement', roles: ['ADMIN'] },
     { page: 'reconciliation', icon: icons.recon,    label: 'Reconciliation', roles: ['ADMIN']        },
     { page: 'expenses',       icon: icons.wallet,   label: 'Expenses',       roles: ['ADMIN']        },
     { page: 'purchases',      icon: icons.shopping, label: 'Purchases',      roles: ['ADMIN']        },

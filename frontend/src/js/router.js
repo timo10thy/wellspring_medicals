@@ -11,13 +11,13 @@ import { renderProfile,    initProfile }    from '../pages/profile.js';
 import { renderAdmin,      initAdmin }      from '../pages/admin.js';
 import { renderExpenses,   initExpenses }   from '../pages/expenses.js';
 import { renderPurchases,  initPurchases }  from '../pages/purchases.js';
+import { renderStockMovement, initStockMovement } from '../pages/stock_movement.js';
 import { renderReconciliation, initReconciliation } from '../pages/reconciliation.js';
 
 const app = document.getElementById('app');
 
 const PUBLIC_PAGES = ['home', 'login', 'register', 'admin-setup'];
-const ADMIN_PAGES  = ['products', 'stock', 'reports', 'expenses', 'purchases', 'reconciliation'];
-
+const ADMIN_PAGES = ['products', 'stock', 'stock_movement', 'reports', 'expenses', 'purchases', 'reconciliation'];
 const PAGES = {
   home:            { render: renderHome                                              },
   login:           { render: renderLogin,          init: initLogin                  },
@@ -32,6 +32,7 @@ const PAGES = {
   expenses:        { render: renderExpenses,        init: initExpenses              },
   purchases:       { render: renderPurchases,       init: initPurchases             },
   reconciliation:  { render: renderReconciliation,  init: initReconciliation        },
+  stock_movement: { render: renderStockMovement, init: initStockMovement },
 };
 
 export function navigate(page, params = {}) {
