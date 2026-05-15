@@ -1,10 +1,8 @@
 from fastapi import APIRouter, Depends, status, HTTPException, Query
-from sqlalchemy.orm import Session,joinedload
-from sqlalchemy import func
-from app.models.users import User
-from sqlalchemy import case
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, case
 from typing import Annotated
-from app.schema.stock_schema import StockCreate,StockResponse,StockConsumptionReport,TotalProductStock,StockExpireAlert
+from app.schema.stock_schema import StockCreate, StockResponse, StockConsumptionReport, TotalProductStock, StockExpireAlert
 from app.routes.basemodel import get_db
 from app.middlewares.admin import admin_validation
 from app.middlewares.auth import AuthMiddleware
@@ -12,38 +10,24 @@ from app.models.users import User
 from app.models.products import Products
 from app.models.stock import Stocks
 from app.models.sales import Sales
-from datetime import datetime,date,timedelta
+from app.routes.movement_helper import log_movement
+from datetime import datetime, date, timedelta
 import logging
 
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix='/stock', tags=['Stock'])
 
-logger=logging.getLogger(__name__)
-router=APIRouter(prefix='/stock',tags=['Stock'])
 
 @router.post('/create', response_model=StockResponse, status_code=status.HTTP_201_CREATED)
-def stock_create(stock_data: StockCreate,db: Session = Depends(get_db),current_admin: User = Depends(admin_validation)):
-    
+def stock_create(stock_data: StockCreate, db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
     if stock_data.quantity <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Stock quantity must be greater than zero"
-        )
-
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Stock quantity must be greater than zero")
     if stock_data.cost_price <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Stock cost price must be greater than zero"
-        )
-
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Stock cost price must be greater than zero")
     try:
-        product = db.query(Products).filter(
-            Products.id == stock_data.product_id
-        ).first()
-
+        product = db.query(Products).filter(Products.id == stock_data.product_id).first()
         if not product:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Product not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
 
         new_stock = Stocks(
             product_id=stock_data.product_id,
@@ -51,20 +35,25 @@ def stock_create(stock_data: StockCreate,db: Session = Depends(get_db),current_a
             cost_price=stock_data.cost_price,
             expiry_date=stock_data.expiry_date
         )
-
         db.add(new_stock)
         db.commit()
         db.refresh(new_stock)
 
+        log_movement(
+            db, new_stock,
+            movement_type='stock_in',
+            quantity_before=0,
+            quantity_after=new_stock.quantity,
+            performed_by=current_admin.user_name,
+            note='New stock created',
+        )
+        db.commit()
         return new_stock
 
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create stock"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create stock")
 
 
 @router.get("/by-product/{product_id}", response_model=StockResponse, status_code=status.HTTP_200_OK)
@@ -76,10 +65,8 @@ def get_stock_by_product(product_id: int, db: Session = Depends(get_db), current
         case((Stocks.expiry_date == None, 1), else_=0),
         Stocks.expiry_date.asc()
     ).first()
-
     if not stock:
         raise HTTPException(status_code=404, detail="No available stock for this product")
-
     return stock
 
 
@@ -87,17 +74,10 @@ def get_stock_by_product(product_id: int, db: Session = Depends(get_db), current
 def check_consumption(stock_id: int, db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
     stock = db.query(Stocks).filter(Stocks.id == stock_id).first()
     if not stock:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Stock not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stock not found")
     product = stock.product
     if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Product for this stock not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product for this stock not found")
 
     sales = db.query(Sales).filter(Sales.stock_id == stock.id).all()
     total_quantity_sold = sum(sale.quantity_sold for sale in sales)
@@ -108,10 +88,7 @@ def check_consumption(stock_id: int, db: Session = Depends(get_db), current_admi
         average_daily_consumption = total_quantity_sold / days_active
     else:
         average_daily_consumption = 0
-    if average_daily_consumption > 0:
-        estimated_days_remaining = int(stock.quantity / average_daily_consumption)
-    else:
-        estimated_days_remaining = 0
+    estimated_days_remaining = int(stock.quantity / average_daily_consumption) if average_daily_consumption > 0 else 0
 
     return {
         "stock_id": stock.id,
@@ -130,9 +107,7 @@ def new_stock(
     db: Session = Depends(get_db),
     current_admin: User = Depends(admin_validation)
 ):
-    product = db.query(Products).filter(
-        Products.name.ilike(stock_data.product_name)
-    ).first()
+    product = db.query(Products).filter(Products.name.ilike(stock_data.product_name)).first()
     if not product:
         raise HTTPException(status_code=404, detail=f"Product '{stock_data.product_name}' not found")
 
@@ -143,21 +118,40 @@ def new_stock(
     ).first()
 
     if existing_stock:
+        qty_before = existing_stock.quantity
         existing_stock.quantity += stock_data.quantity
         db.add(existing_stock)
         db.commit()
         db.refresh(existing_stock)
+        log_movement(
+            db, existing_stock,
+            movement_type='stock_in',
+            quantity_before=qty_before,
+            quantity_after=existing_stock.quantity,
+            performed_by=current_admin.user_name,
+            note='Stock replenished',
+        )
+        db.commit()
         return existing_stock
     else:
         new_stock_entry = Stocks(
             product_id=product.id,
             quantity=stock_data.quantity,
             cost_price=stock_data.cost_price,
-            expiry_date=stock_data.expiry_date
+            expiry_date=stock_data.expiry_date,
         )
         db.add(new_stock_entry)
         db.commit()
         db.refresh(new_stock_entry)
+        log_movement(
+            db, new_stock_entry,
+            movement_type='stock_in',
+            quantity_before=0,
+            quantity_after=new_stock_entry.quantity,
+            performed_by=current_admin.user_name,
+            note='New stock entry created',
+        )
+        db.commit()
         return new_stock_entry
 
 
@@ -194,10 +188,8 @@ def get_product_total_stock(product_id: int, db: Session = Depends(get_db), curr
         .group_by(Products.id, Products.name)
         .first()
     )
-
     if not total_stock:
         raise HTTPException(status_code=404, detail="Product not found or no stock available")
-
     return total_stock
 
 
@@ -216,15 +208,11 @@ def total_product_per_stock_search(db: Session = Depends(get_db), current_admin:
     return total_stock
 
 
-# ── All users can search products for sales ───────────────────────────────────
 @router.get("/total/search", response_model=list[TotalProductStock], status_code=status.HTTP_200_OK)
 def search_total_product_stock(
-    product_name: str | None = Query(
-        default=None,
-        description="Search product by name (partial match)"
-    ),
+    product_name: str | None = Query(default=None, description="Search product by name (partial match)"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(AuthMiddleware),  # ← was admin_validation, now all users
+    current_user: User = Depends(AuthMiddleware),
 ):
     query = (
         db.query(
@@ -235,21 +223,15 @@ def search_total_product_stock(
         .join(Stocks, Stocks.product_id == Products.id)
         .group_by(Products.id, Products.name)
     )
-
     if product_name:
-        query = query.filter(
-            Products.name.ilike(f"%{product_name}%")
-        )
-
+        query = query.filter(Products.name.ilike(f"%{product_name}%"))
     return query.all()
 
 
 @router.get("/stocks/expiry-alerts", response_model=list[StockExpireAlert], status_code=status.HTTP_200_OK)
 def expiration_alert(db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
-
     today = date.today()
     expiry_window = today + timedelta(days=180)
-
     stocks = (
         db.query(Stocks)
         .join(Stocks.product)
@@ -277,19 +259,16 @@ def expiration_alert(db: Session = Depends(get_db), current_admin: User = Depend
     alerts = []
     for stock in stocks:
         remaining_days = (stock.expiry_date - today).days
-        alerts.append(
-            StockExpireAlert(
-                stock_id=stock.id,
-                product_id=stock.product_id,
-                product_name=stock.product.name,
-                expire_date=stock.expiry_date,
-                days_to_expire=remaining_days,
-                quantity_affected=str(stock.quantity),
-                stock_value_cost=float(stock.quantity * stock.cost_price),
-                recommended_action=get_expiry_action(remaining_days)
-            )
-        )
-
+        alerts.append(StockExpireAlert(
+            stock_id=stock.id,
+            product_id=stock.product_id,
+            product_name=stock.product.name,
+            expire_date=stock.expiry_date,
+            days_to_expire=remaining_days,
+            quantity_affected=str(stock.quantity),
+            stock_value_cost=float(stock.quantity * stock.cost_price),
+            recommended_action=get_expiry_action(remaining_days)
+        ))
     return alerts
 
 

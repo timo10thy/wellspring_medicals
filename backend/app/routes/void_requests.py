@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from app.routes.basemodel import get_db
 from app.models.void_request import VoidRequest
 from app.models.sales import Sales
+from app.routes.movement_helper import log_movement
 from app.models.stock import Stocks
 from app.middlewares.auth import AuthMiddleware
 from app.middlewares.admin import admin_validation
@@ -108,7 +109,17 @@ def approve_void(
 
     stock = db.query(Stocks).filter(Stocks.id == sale.stock_id).first()
     if stock:
+        qty_before = stock.quantity
         stock.quantity += sale.quantity_sold
+        log_movement(
+            db, stock,
+            movement_type='void_restore',
+            quantity_before=qty_before,
+            quantity_after=stock.quantity,
+            performed_by=current_admin.user_name,
+            reference_id=sale.id,
+            note=f"Void approved for sale #{sale.id}",
+        )
 
     sale.is_voided   = True
     sale.void_reason = vr.reason
