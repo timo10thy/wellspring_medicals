@@ -15,6 +15,7 @@ from app.routes.reconciliation import router as reconciliation
 from app.routes.basemodel import engine
 from app.models.base import Base
 from app.routes.void_requests import router as void_requests_router
+from app.routes.stock_movement import router as stock_movement_router
 
 # Import new model so create_all picks it up
 from app.models import reconciliation as _recon_model  
@@ -60,5 +61,6 @@ app.include_router(expenses)
 app.include_router(purchase_receipts)
 app.include_router(dashboard)
 app.include_router(reports)
-app.include_router(reconciliation)   
+app.include_router(reconciliation)
 app.include_router(void_requests_router)
+app.include_router(stock_movement_router)
