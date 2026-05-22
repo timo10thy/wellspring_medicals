@@ -133,26 +133,32 @@ def close_shift(
 @router.get("/all")
 def get_all_shifts(
     db: db_dependency,
-    current_admin: User = Depends(admin_validation),
+    current_user: User = Depends(AuthMiddleware),
 ):
-    shifts = db.query(Shift).order_by(Shift.opened_at.desc()).all()
+    if current_user.role == 'ADMIN':
+        shifts = db.query(Shift).order_by(Shift.opened_at.desc()).all()
+    else:
+        shifts = db.query(Shift).filter(
+            Shift.opened_by == current_user.id
+        ).order_by(Shift.opened_at.desc()).all()
+
     result = []
     for s in shifts:
         opener = db.query(User).filter(User.id == s.opened_by).first()
         result.append({
-            "id":            s.id,
-            "opened_by":     opener.user_name if opener else "—",
+            "id":             s.id,
+            "opened_by":      opener.user_name if opener else "—",
             "opened_by_name": opener.name if opener else "—",
-            "status":        s.status,
-            "total_sales":   float(s.total_sales or 0),
-            "pos_amount":    float(s.pos_amount or 0),
-            "cash_expected": float(s.cash_expected or 0),
-            "cash_counted":  float(s.cash_counted or 0),
-            "variance":      float(s.variance or 0),
-            "note":          s.note,
-            "reviewed_by":   s.reviewed_by,
-            "opened_at":     str(s.opened_at),
-            "closed_at":     str(s.closed_at) if s.closed_at else None,
+            "status":         s.status,
+            "total_sales":    float(s.total_sales or 0),
+            "pos_amount":     float(s.pos_amount or 0),
+            "cash_expected":  float(s.cash_expected or 0),
+            "cash_counted":   float(s.cash_counted or 0),
+            "variance":       float(s.variance or 0),
+            "note":           s.note,
+            "reviewed_by":    s.reviewed_by,
+            "opened_at":      str(s.opened_at),
+            "closed_at":      str(s.closed_at) if s.closed_at else None,
         })
     return result
 
