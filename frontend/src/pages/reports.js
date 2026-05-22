@@ -1,5 +1,6 @@
-// ── Reports Page (Admin only) ─────────────────────────────────────────────────
+// Reports Page (Admin only)
 // GET /reports/summary?period=daily|weekly|monthly|yearly
+// GET /reports/staff-sales?period=...&start_date=...&end_date=...
 // GET /stock/stocks/expiry-alerts
 // GET /stock/{stock_id}/consumption
 
@@ -11,9 +12,6 @@ import { renderSidebar, renderTopbar, bindSidebar,
 export function renderReports() {
   return `
   <style>
-    /* ── Reports page mobile fixes ── */
-
-    /* Tab bar */
     .report-tabs {
       display: flex;
       gap: 0;
@@ -36,55 +34,32 @@ export function renderReports() {
       color: var(--accent-lt);
       border-bottom-color: var(--accent);
     }
-
-    /* Summary two-column grid */
     .summary-split-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 20px;
       margin-bottom: 24px;
     }
-
-    /* Expiry table wrapper — always scrollable */
     .expiry-table-wrap {
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
     }
-    .expiry-table-wrap table {
-      min-width: 600px;
-    }
+    .expiry-table-wrap table { min-width: 600px; }
 
     @media (max-width: 768px) {
-      .report-tab {
-        padding: 8px 12px;
-        font-size: 12px;
-      }
-
-      /* Collapse two-column summary grid to single column */
-      .summary-split-grid {
-        grid-template-columns: 1fr !important;
-      }
-
-      /* Period buttons wrap and stretch */
-      .period-btns-row {
-        flex-wrap: wrap;
-      }
+      .report-tab { padding: 8px 12px; font-size: 12px; }
+      .summary-split-grid { grid-template-columns: 1fr !important; }
+      .period-btns-row { flex-wrap: wrap; }
       .period-btns-row .period-btn {
-        flex: 1;
-        min-width: 70px;
-        text-align: center;
-        justify-content: center;
+        flex: 1; min-width: 70px;
+        text-align: center; justify-content: center;
       }
-
-      /* Consumption lookup stacks */
-      .cons-lookup-row {
-        flex-direction: column;
-        align-items: stretch !important;
-      }
-      .cons-lookup-row .btn {
-        width: 100%;
-        justify-content: center;
-      }
+      .cons-lookup-row { flex-direction: column; align-items: stretch !important; }
+      .cons-lookup-row .btn { width: 100%; justify-content: center; }
+      .staff-filter-row { flex-direction: column; align-items: stretch !important; }
+      .staff-filter-row .btn { width: 100%; }
+      .staff-filter-row input,
+      .staff-filter-row select { width: 100%; box-sizing: border-box; }
     }
   </style>
 
@@ -97,17 +72,17 @@ export function renderReports() {
         <!-- Tab bar -->
         <div class="report-tabs">
           <button class="report-tab active" data-tab="summary">Sales Summary</button>
+          <button class="report-tab" data-tab="staff">Staff Sales</button>
           <button class="report-tab" data-tab="expiry">Expiry Alerts</button>
-          <button class="report-tab" data-tab="consumption">Consumption Report</button>
+          <button class="report-tab" data-tab="consumption">Consumption</button>
         </div>
 
-        <!-- ── Sales Summary Tab ── -->
+        <!-- Sales Summary Tab -->
         <div id="tab-summary">
           <div class="period-btns-row" style="display:flex;gap:8px;margin-bottom:20px;">
             ${['daily','weekly','monthly','yearly'].map((p, i) => `
               <button class="period-btn ${i === 0 ? 'btn btn-primary' : 'btn btn-ghost'}"
-                data-period="${p}"
-                style="text-transform:capitalize;font-size:13px;">
+                data-period="${p}" style="text-transform:capitalize;font-size:13px;">
                 ${p.charAt(0).toUpperCase() + p.slice(1)}
               </button>`).join('')}
           </div>
@@ -118,7 +93,43 @@ export function renderReports() {
           </div>
         </div>
 
-        <!-- ── Expiry Alerts Tab ── -->
+        <!-- Staff Sales Tab -->
+        <div id="tab-staff" style="display:none;">
+          <div class="card" style="padding:16px 20px;margin-bottom:20px;">
+            <div class="staff-filter-row" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+              <div>
+                <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">Period</label>
+                <select class="field-input" id="staff-period" style="width:140px;">
+                  <option value="daily">Today</option>
+                  <option value="weekly">This Week</option>
+                  <option value="monthly" selected>This Month</option>
+                  <option value="yearly">This Year</option>
+                  <option value="custom">Custom Range</option>
+                </select>
+              </div>
+              <div id="staff-custom-dates" style="display:none;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+                <div>
+                  <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">From</label>
+                  <input type="date" class="field-input" id="staff-start-date"/>
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">To</label>
+                  <input type="date" class="field-input" id="staff-end-date"/>
+                </div>
+              </div>
+              <button id="staff-load-btn" class="btn btn-primary" style="height:38px;">
+                ${icons.search} Load
+              </button>
+            </div>
+          </div>
+          <div id="staff-content">
+            <div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;padding:40px 0;">
+              <span class="spinner" style="border-top-color:var(--accent)"></span> Loading…
+            </div>
+          </div>
+        </div>
+
+        <!-- Expiry Alerts Tab -->
         <div id="tab-expiry" style="display:none;">
           <div class="card" style="overflow:hidden;">
             <div style="padding:14px 18px;border-bottom:1px solid var(--border);
@@ -143,7 +154,7 @@ export function renderReports() {
           </div>
         </div>
 
-        <!-- ── Consumption Tab ── -->
+        <!-- Consumption Tab -->
         <div id="tab-consumption" style="display:none;">
           <div class="card" style="padding:20px;margin-bottom:20px;">
             <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:14px;">
@@ -175,6 +186,14 @@ export async function initReports() {
 
   document.getElementById('refresh-expiry')?.addEventListener('click', loadExpiry);
 
+  // Staff period toggle
+  document.getElementById('staff-period')?.addEventListener('change', (e) => {
+    const customEl = document.getElementById('staff-custom-dates');
+    customEl.style.display = e.target.value === 'custom' ? 'flex' : 'none';
+  });
+
+  document.getElementById('staff-load-btn')?.addEventListener('click', loadStaffSales);
+
   document.getElementById('cons-btn')?.addEventListener('click', async () => {
     const id = parseInt(document.getElementById('cons-stock-id').value);
     if (!id || id < 1) return;
@@ -185,37 +204,124 @@ export async function initReports() {
   });
 }
 
-// ── Tab switching ─────────────────────────────────────────────────────────────
+// Tab switching
 function bindTabs() {
   document.querySelectorAll('.report-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-
       const which = tab.getAttribute('data-tab');
       document.getElementById('tab-summary').style.display     = which === 'summary'     ? 'block' : 'none';
+      document.getElementById('tab-staff').style.display       = which === 'staff'       ? 'block' : 'none';
       document.getElementById('tab-expiry').style.display      = which === 'expiry'      ? 'block' : 'none';
       document.getElementById('tab-consumption').style.display = which === 'consumption' ? 'block' : 'none';
-
       if (which === 'expiry') loadExpiry();
+      if (which === 'staff')  loadStaffSales();
     });
   });
 }
 
-// ── Period button switching ───────────────────────────────────────────────────
+// Period buttons
 function bindPeriodBtns() {
   document.querySelectorAll('.period-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      document.querySelectorAll('.period-btn').forEach(b => {
-        b.className = 'period-btn btn btn-ghost';
-      });
+      document.querySelectorAll('.period-btn').forEach(b => b.className = 'period-btn btn btn-ghost');
       btn.className = 'period-btn btn btn-primary';
       await loadSummary(btn.dataset.period);
     });
   });
 }
 
-// ── Load summary ──────────────────────────────────────────────────────────────
+// Staff sales
+async function loadStaffSales() {
+  const container = document.getElementById('staff-content');
+  container.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;padding:40px 0;">
+      <span class="spinner" style="border-top-color:var(--accent)"></span> Loading staff report…
+    </div>`;
+
+  const period    = document.getElementById('staff-period').value;
+  const startDate = document.getElementById('staff-start-date').value;
+  const endDate   = document.getElementById('staff-end-date').value;
+
+  let url = `/reports/staff-sales?period=${period}`;
+  if (period === 'custom' && startDate && endDate) {
+    url += `&start_date=${startDate}&end_date=${endDate}`;
+  }
+
+  try {
+    const d = await api.get(url);
+
+    if (!d.staff.length) {
+      container.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:40px 0;">No sales recorded for this period.</div>`;
+      return;
+    }
+
+    const totalRevenue = d.staff.reduce((s, u) => s + u.total_revenue, 0);
+
+    container.innerHTML = `
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">
+        ${d.date_from === d.date_to ? fmtDate(d.date_from) : fmtDate(d.date_from) + ' → ' + fmtDate(d.date_to)}
+        · ${d.staff.length} staff member${d.staff.length !== 1 ? 's' : ''}
+      </div>
+
+      <!-- Summary KPIs -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:24px;">
+        ${kpiCard('Total Revenue', `₦${fmt(totalRevenue)}`, '💰', 'var(--accent-lt)')}
+        ${kpiCard('Total Transactions', d.staff.reduce((s,u) => s + u.sales_count, 0), '🧾', 'var(--info)')}
+        ${kpiCard('Total Units', d.staff.reduce((s,u) => s + u.total_units, 0), '📦', 'var(--text)')}
+        ${kpiCard('Staff Members', d.staff.length, '👤', 'var(--warn)')}
+      </div>
+
+      <!-- Per-staff breakdown -->
+      <div class="card" style="overflow:hidden;">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
+          <span style="font-size:13px;font-weight:500;color:var(--text);">👤 Per Staff Breakdown</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="data-table">
+            <thead><tr>
+              <th>#</th>
+              <th>Staff</th>
+              <th>Username</th>
+              <th>Transactions</th>
+              <th>Units Sold</th>
+              <th>Avg Sale</th>
+              <th>Revenue</th>
+              <th>Share</th>
+            </tr></thead>
+            <tbody>
+              ${d.staff.map((s, i) => {
+                const share = totalRevenue > 0 ? Math.round((s.total_revenue / totalRevenue) * 100) : 0;
+                return `
+                  <tr>
+                    <td style="color:var(--muted);font-weight:600;">${i + 1}</td>
+                    <td style="font-weight:500;">${s.name}</td>
+                    <td style="color:var(--muted);font-size:12px;">@${s.user_name}</td>
+                    <td>${s.sales_count}</td>
+                    <td>${s.total_units}</td>
+                    <td>₦${fmt(s.avg_sale_value)}</td>
+                    <td style="color:var(--accent-lt);font-weight:500;">₦${fmt(s.total_revenue)}</td>
+                    <td>
+                      <div style="display:flex;align-items:center;gap:6px;">
+                        <div style="flex:1;height:5px;background:var(--surface2);border-radius:99px;overflow:hidden;min-width:50px;">
+                          <div style="height:100%;width:${share}%;background:var(--accent);border-radius:99px;"></div>
+                        </div>
+                        <span style="font-size:11px;color:var(--muted);">${share}%</span>
+                      </div>
+                    </td>
+                  </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  } catch (err) {
+    container.innerHTML = `<div style="color:#f87171;font-size:13px;padding:20px 0;">${err.message}</div>`;
+  }
+}
+
+// Load summary
 async function loadSummary(period) {
   const container = document.getElementById('summary-content');
   container.innerHTML = `
@@ -229,13 +335,10 @@ async function loadSummary(period) {
     const periodLabel = period.charAt(0).toUpperCase() + period.slice(1);
 
     container.innerHTML = `
-
-      <!-- Date range label -->
       <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">
         ${periodLabel} report · ${fmtDate(d.date_from)}${d.date_from !== d.date_to ? ' → ' + fmtDate(d.date_to) : ''}
       </div>
 
-      <!-- KPI cards -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:24px;">
         ${kpiCard('Total Sales',    `₦${fmt(d.total_sales_amount)}`, '💰', 'var(--accent-lt)')}
         ${kpiCard('Transactions',   d.total_sales_count,             '🧾', 'var(--info)')}
@@ -247,10 +350,7 @@ async function loadSummary(period) {
         ${kpiCard('Profit',         `₦${fmt(d.profit)}`,            '📈', profitColor)}
       </div>
 
-      <!-- Top products + Expense breakdown -->
       <div class="summary-split-grid" style="grid-template-columns:${d.expense_breakdown.length ? '1fr 1fr' : '1fr'};">
-
-        <!-- Top selling products -->
         <div class="card" style="overflow:hidden;">
           <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
             <span style="font-size:13px;font-weight:500;color:var(--text);">🏆 Top Selling Products</span>
@@ -275,7 +375,6 @@ async function loadSummary(period) {
             : `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px;">No sales recorded.</div>`}
         </div>
 
-        <!-- Expense breakdown -->
         ${d.expense_breakdown.length ? `
         <div class="card" style="overflow:hidden;">
           <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
@@ -286,8 +385,7 @@ async function loadSummary(period) {
           </div>
           <div style="padding:14px 18px;">
             ${d.expense_breakdown.map(e => {
-              const pct = d.total_expenses > 0
-                ? Math.round((e.total / d.total_expenses) * 100) : 0;
+              const pct = d.total_expenses > 0 ? Math.round((e.total / d.total_expenses) * 100) : 0;
               return `
                 <div style="margin-bottom:14px;">
                   <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;">
@@ -303,7 +401,6 @@ async function loadSummary(period) {
         </div>` : ''}
       </div>
 
-      <!-- Purchases table (weekly / monthly / yearly) -->
       ${d.purchases && d.purchases.length ? `
       <div class="card" style="overflow:hidden;">
         <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
@@ -334,7 +431,7 @@ async function loadSummary(period) {
   }
 }
 
-// ── Expiry alerts ─────────────────────────────────────────────────────────────
+// Expiry alerts
 async function loadExpiry() {
   const tbody = document.getElementById('expiry-tbody');
   if (!tbody) return;
@@ -366,7 +463,7 @@ async function loadExpiry() {
   }
 }
 
-// ── Consumption ───────────────────────────────────────────────────────────────
+// Consumption
 async function loadConsumption(stockId) {
   const container = document.getElementById('cons-result');
   container.style.display = 'block';
@@ -386,12 +483,11 @@ async function loadConsumption(stockId) {
           ${r.product_name}
           <span style="font-size:13px;color:var(--muted);font-family:var(--font-body);">— Stock #${r.stock_id}</span>
         </div>
-
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:16px;">
           ${[
-            ['Current Qty',    r.current_quantity.toLocaleString(),    'var(--accent)'],
+            ['Current Qty',    r.current_quantity.toLocaleString(),       'var(--accent)'],
             ['Initial Qty',    r.initial_stock_quantity.toLocaleString(), 'var(--info)'],
-            ['Total Sold',     r.total_quantity_sold.toLocaleString(),  'var(--warn)'],
+            ['Total Sold',     r.total_quantity_sold.toLocaleString(),    'var(--warn)'],
             ['Days Remaining', r.estimated_days_remaining + ' days',
               r.estimated_days_remaining < 30 ? 'var(--danger)' : 'var(--accent)'],
           ].map(([label, val, color]) => `
@@ -400,7 +496,6 @@ async function loadConsumption(stockId) {
               <div style="font-size:11px;color:var(--muted);margin-top:2px">${label}</div>
             </div>`).join('')}
         </div>
-
         <div style="margin-bottom:4px;display:flex;justify-content:space-between;font-size:11px;color:var(--muted);">
           <span>Stock consumed</span><span>${pct}%</span>
         </div>
@@ -418,7 +513,7 @@ async function loadConsumption(stockId) {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// Helpers
 function kpiCard(label, value, emoji, color) {
   return `
     <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:16px;">

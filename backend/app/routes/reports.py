@@ -43,7 +43,7 @@ def sales_summary(
 ):
     start, end = get_date_range(period)
 
-    # ── Sales ─────────────────────────────────────────────────────────────────
+    #Sales
     sales_rows = (
         db.query(Sales, Products.name)
         .join(Stocks, Sales.stock_id == Stocks.id)
@@ -57,7 +57,7 @@ def sales_summary(
     total_sales_count   = len(sales_rows)
     total_units_sold    = sum(s.quantity_sold for s, _ in sales_rows)
 
-    # ── Top selling products ──────────────────────────────────────────────────
+    #Top selling products
     product_totals = {}
     for sale, name in sales_rows:
         if name not in product_totals:
@@ -72,7 +72,7 @@ def sales_summary(
         reverse=True
     )[:10]
 
-    # ── Expenses (operating only — excludes GOODS_PURCHASE) ──────────────────
+    #Expenses (operating only — excludes GOODS_PURCHASE)
     # Daily shows operating expenses; weekly/monthly/yearly show all expenses
     expense_query = (
         db.query(Expense)
@@ -99,7 +99,7 @@ def sales_summary(
         for k, v in sorted(expense_breakdown.items(), key=lambda x: x[1], reverse=True)
     ]
 
-    # ── Purchases (weekly, monthly, yearly only) ──────────────────────────────
+    #Purchases (weekly, monthly, yearly only) 
     total_purchases = 0.0
     purchase_count  = 0
     purchases_list  = []
@@ -124,7 +124,7 @@ def sales_summary(
             for p in purchase_rows
         ]
 
-    # ── Profit ────────────────────────────────────────────────────────────────
+    # Profit 
     profit = total_sales_amount - total_expenses - total_purchases
 
     return {
@@ -151,4 +151,70 @@ def sales_summary(
 
         # Top products
         'top_products':        top_products,
+    }
+
+# staff sales reconcillation
+@router.get('/staff-sales', status_code=status.HTTP_200_OK)
+def staff_sales_report(
+    period: str = Query(default='daily', description="daily | weekly | monthly | yearly"),
+    start_date: str = Query(default=None, description="Custom start date YYYY-MM-DD"),
+    end_date: str = Query(default=None, description="Custom end date YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(admin_validation)
+):
+    # Date range
+    if start_date and end_date:
+        try:
+            start = date.fromisoformat(start_date)
+            end   = date.fromisoformat(end_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+    else:
+        start, end = get_date_range(period)
+
+    sales_rows = (
+        db.query(Sales, User)
+        .join(User, Sales.sold_by == User.id)
+        .filter(
+            func.date(Sales.created_at) >= start,
+            func.date(Sales.created_at) <= end,
+            Sales.is_voided == False,
+        )
+        .all()
+    )
+
+    # Group by user
+    staff_map = {}
+    for sale, user in sales_rows:
+        uid = user.id
+        if uid not in staff_map:
+            staff_map[uid] = {
+                'user_id':       uid,
+                'name':          user.name,
+                'user_name':     user.user_name,
+                'sales_count':   0,
+                'total_revenue': 0.0,
+                'total_units':   0,
+            }
+        staff_map[uid]['sales_count']   += 1
+        staff_map[uid]['total_revenue'] += float(sale.total_amount)
+        staff_map[uid]['total_units']   += sale.quantity_sold
+
+    staff_list = sorted(
+        staff_map.values(),
+        key=lambda x: x['total_revenue'],
+        reverse=True
+    )
+
+    # Add average sale value
+    for s in staff_list:
+        s['avg_sale_value'] = round(
+            s['total_revenue'] / s['sales_count'], 2
+        ) if s['sales_count'] > 0 else 0.0
+
+    return {
+        'period':     period,
+        'date_from':  str(start),
+        'date_to':    str(end),
+        'staff':      staff_list,
     }
