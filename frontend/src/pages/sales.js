@@ -13,6 +13,12 @@ function currentUsername() {
   return user.username || '';
 }
 
+// ── Module state ──────────────────────────────────────────────────────────────
+let cart              = [];
+let pendingVoidSaleId = null;
+let pendingVoidReqId  = null;
+let activeShift       = null;   // null = no open shift for this user
+
 // ── Render ────────────────────────────────────────────────────────────────────
 export function renderSales() {
   return `
@@ -21,6 +27,9 @@ export function renderSales() {
     <div class="main-content">
       ${renderTopbar('Sales', 'Record sales and issue receipts')}
       <div class="page-body">
+
+        <!-- Shift status banner (staff only, injected by initSales) -->
+        ${!isAdmin() ? `<div id="shift-status-banner" style="margin-bottom:20px;"></div>` : ''}
 
         <!-- New Sale button -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
@@ -158,20 +167,25 @@ export function renderSales() {
   </div>`;
 }
 
-// ── State ─────────────────────────────────────────────────────────────────────
-let cart               = [];
-let pendingVoidSaleId  = null;
-let pendingVoidReqId   = null; // for admin approve/reject
-
 // ── Init ──────────────────────────────────────────────────────────────────────
-export function initSales() {
+export async function initSales() {
   bindSidebar();
   bindModalClose('new-sale-modal');
   bindModalClose('void-modal');
   bindModalClose('void-request-modal');
   bindModalClose('reject-modal');
 
+  // Staff: load shift status first, then render banner
+  if (!isAdmin()) {
+    await loadMyShift();
+  }
+
+  // "New Sale" button — gate on shift for staff
   document.getElementById('new-sale-btn')?.addEventListener('click', () => {
+    if (!isAdmin() && !activeShift) {
+      promptOpenShift();
+      return;
+    }
     resetSaleModal();
     openModal('new-sale-modal');
   });
@@ -257,6 +271,89 @@ export function initSales() {
   if (isAdmin()) loadVoidRequests();
 }
 
+// ── Shift helpers (staff only) ────────────────────────────────────────────────
+
+// Fetch the user's active shift and render the status banner
+async function loadMyShift() {
+  try {
+    const data  = await api.get('/shifts/my-shift');
+    activeShift = data.shift || null;
+  } catch {
+    activeShift = null;
+  }
+  renderShiftBanner();
+}
+
+// Render a compact shift status banner above the page actions
+function renderShiftBanner() {
+  const banner = document.getElementById('shift-status-banner');
+  if (!banner) return;
+
+  if (activeShift) {
+    // Green: shift open — show sales so far and a close hint
+    banner.innerHTML = `
+      <div class="card" style="padding:14px 18px;border-left:3px solid var(--accent);display:flex;
+           align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-size:13px;font-weight:500;color:var(--text);">
+            🟢 Shift #${activeShift.id} — Active
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">
+            Opened: ${fmtDateTime(activeShift.opened_at)} &nbsp;·&nbsp;
+            Sales so far: <strong style="color:var(--accent-lt);">₦${fmt(activeShift.sales_so_far)}</strong>
+          </div>
+        </div>
+        <span style="font-size:11px;color:var(--muted);">Go to <strong>Shifts</strong> to close your shift.</span>
+      </div>`;
+  } else {
+    // Amber: no open shift — prompt to open one
+    banner.innerHTML = `
+      <div class="card" style="padding:14px 18px;border-left:3px solid #f59e0b;display:flex;
+           align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-size:13px;font-weight:500;color:var(--text);">⚠ No active shift</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">
+            You must open a shift before you can record sales.
+          </div>
+        </div>
+        <button id="banner-open-shift-btn" class="btn btn-primary" style="font-size:12px;padding:6px 16px;">
+          Open Shift
+        </button>
+      </div>`;
+    document.getElementById('banner-open-shift-btn')?.addEventListener('click', openShiftFromBanner);
+  }
+}
+
+// Called when user clicks "New Sale" with no open shift — scrolls to banner
+// and briefly highlights it instead of silently doing nothing
+function promptOpenShift() {
+  const banner = document.getElementById('shift-status-banner');
+  if (!banner) return;
+  banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  // Pulse the border to draw attention
+  banner.style.transition = 'opacity 0.15s';
+  banner.style.opacity    = '0.4';
+  setTimeout(() => { banner.style.opacity = '1'; }, 150);
+  setTimeout(() => { banner.style.opacity = '0.4'; }, 350);
+  setTimeout(() => { banner.style.opacity = '1'; }, 500);
+}
+
+// Open shift inline from the banner button
+async function openShiftFromBanner() {
+  const btn = document.getElementById('banner-open-shift-btn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Opening…';
+  try {
+    await api.post('/shifts/open');
+    await loadMyShift();          // refreshes activeShift + re-renders banner
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+    btn.innerHTML = 'Open Shift';
+  }
+}
+
 // ── Load pending void requests (admin) ───────────────────────────────────────
 async function loadVoidRequests() {
   const section = document.getElementById('void-requests-section');
@@ -326,6 +423,7 @@ async function loadVoidRequests() {
   }
 }
 
+// ── Modal helpers ─────────────────────────────────────────────────────────────
 function resetSaleModal() {
   cart = [];
   document.getElementById('ns-product-search').value         = '';
@@ -504,6 +602,14 @@ async function submitSale() {
   const btn    = document.getElementById('ns-submit');
   errEl.classList.remove('show');
   sucEl.classList.remove('show');
+
+  // Safety net: re-verify shift is still open before submitting
+  if (!isAdmin() && !activeShift) {
+    errEl.querySelector('span').textContent = 'No active shift. Please open a shift before recording a sale.';
+    errEl.classList.add('show');
+    return;
+  }
+
   if (!cart.length) {
     errEl.querySelector('span').textContent = 'Add at least one product to the cart.';
     errEl.classList.add('show');
@@ -531,6 +637,8 @@ async function submitSale() {
     sucEl.classList.add('show');
     cart = [];
     renderCart();
+    // Refresh shift totals in the banner so "sales so far" stays accurate
+    if (!isAdmin()) loadMyShift();
     setTimeout(() => {
       document.getElementById('view-receipt-link')?.addEventListener('click', () => {
         closeModal('new-sale-modal');
@@ -558,7 +666,7 @@ async function fetchReceipt(id) {
 
     // Badge
     let badge = `<span class="badge badge-green">Completed</span>`;
-    if (r.is_voided)    badge = `<span class="badge badge-red">Voided</span>`;
+    if (r.is_voided)         badge = `<span class="badge badge-red">Voided</span>`;
     else if (r.void_pending) badge = `<span class="badge" style="background:#fef3c7;color:#92400e;">Void Pending</span>`;
 
     // Action buttons
