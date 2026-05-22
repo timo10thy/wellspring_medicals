@@ -13,11 +13,13 @@ import { renderExpenses,   initExpenses }   from '../pages/expenses.js';
 import { renderPurchases,  initPurchases }  from '../pages/purchases.js';
 import { renderStockMovement, initStockMovement } from '../pages/stock_movement.js';
 import { renderReconciliation, initReconciliation } from '../pages/reconciliation.js';
+import { renderShifts, initShifts } from '../pages/shifts.js';
 
 const app = document.getElementById('app');
 
 const PUBLIC_PAGES = ['home', 'login', 'register', 'admin-setup'];
 const ADMIN_PAGES = ['products', 'stock', 'stock_movement', 'reports', 'expenses', 'purchases', 'reconciliation'];
+const AUTH_PAGES  = ['shifts'];
 const PAGES = {
   home:            { render: renderHome                                              },
   login:           { render: renderLogin,          init: initLogin                  },
@@ -33,6 +35,7 @@ const PAGES = {
   purchases:       { render: renderPurchases,       init: initPurchases             },
   reconciliation:  { render: renderReconciliation,  init: initReconciliation        },
   stock_movement: { render: renderStockMovement, init: initStockMovement },
+  shifts: { render: renderShifts, init: initShifts },
 };
 
 export function navigate(page, params = {}) {
@@ -47,6 +50,9 @@ export function navigate(page, params = {}) {
   }
   if (ADMIN_PAGES.includes(page) && !auth.isAdmin()) {
     _render('dashboard'); return;
+  }
+  if (AUTH_PAGES.includes(page) && !auth.isLoggedIn()) {
+    _render('login'); return;
   }
   _render(page, params);
 }
