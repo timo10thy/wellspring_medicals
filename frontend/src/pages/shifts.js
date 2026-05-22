@@ -4,7 +4,7 @@ import { renderSidebar, renderTopbar, bindSidebar,
          fmt, fmtDateTime, icons } from '../js/ui.js';
 
 function isAdmin() {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const user = JSON.parse(localStorage.getItem('pharma_user') || '{}');
   return user.role === 'ADMIN';
 }
 

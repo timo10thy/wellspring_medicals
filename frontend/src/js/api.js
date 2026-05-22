@@ -4,7 +4,7 @@ import { navigate } from './router.js';
 const IS_DEV = location.port === '5500';
 const BASE   = IS_DEV
   ? 'http://localhost:8002'
-  : 'https://pharma-backend-fe2h.onrender.com';
+  : 'https://YOUR-ACTUAL-BACKEND-URL.onrender.com';
 
 async function request(method, path, body = null, requiresAuth = true) {
   const headers = requiresAuth
