@@ -7,7 +7,8 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRATION_MINUTES = int(os.getenv("JWT_EXPIRATION_KEY", 720))
 
-
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY environment variable is not set")
 def create_access_token(
     claims: Dict,
     expires_delta: Optional[timedelta] = None
