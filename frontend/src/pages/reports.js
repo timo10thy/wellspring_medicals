@@ -1,5 +1,5 @@
 // Reports Page (Admin only)
-// GET /reports/summary?period=daily|weekly|monthly|yearly
+// GET /reports/summary?period=daily|weekly|monthly|yearly|custom&start_date=&end_date=
 // GET /reports/staff-sales?period=...&start_date=...&end_date=...
 // GET /stock/stocks/expiry-alerts
 // GET /stock/{stock_id}/consumption
@@ -79,12 +79,27 @@ export function renderReports() {
 
         <!-- Sales Summary Tab -->
         <div id="tab-summary">
-          <div class="period-btns-row" style="display:flex;gap:8px;margin-bottom:20px;">
-            ${['daily','weekly','monthly','yearly'].map((p, i) => `
-              <button class="period-btn ${i === 0 ? 'btn btn-primary' : 'btn btn-ghost'}"
-                data-period="${p}" style="text-transform:capitalize;font-size:13px;">
-                ${p.charAt(0).toUpperCase() + p.slice(1)}
-              </button>`).join('')}
+          <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:20px;">
+            <div class="period-btns-row" style="display:flex;gap:8px;flex-wrap:wrap;">
+              ${['daily','weekly','monthly','yearly'].map((p, i) => `
+                <button class="period-btn ${i === 0 ? 'btn btn-primary' : 'btn btn-ghost'}"
+                  data-period="${p}" style="text-transform:capitalize;font-size:13px;">
+                  ${p.charAt(0).toUpperCase() + p.slice(1)}
+                </button>`).join('')}
+              <button class="period-btn btn btn-ghost" data-period="custom"
+                style="font-size:13px;">Custom</button>
+            </div>
+            <div id="summary-custom-dates" style="display:none;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+              <div>
+                <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">From</label>
+                <input type="date" class="field-input" id="summary-start-date"/>
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:4px;">To</label>
+                <input type="date" class="field-input" id="summary-end-date"/>
+              </div>
+              <button id="summary-custom-load" class="btn btn-primary" style="height:38px;">Load</button>
+            </div>
           </div>
           <div id="summary-content">
             <div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;padding:40px 0;">
@@ -186,7 +201,6 @@ export async function initReports() {
 
   document.getElementById('refresh-expiry')?.addEventListener('click', loadExpiry);
 
-  // Staff period toggle
   document.getElementById('staff-period')?.addEventListener('change', (e) => {
     const customEl = document.getElementById('staff-custom-dates');
     customEl.style.display = e.target.value === 'custom' ? 'flex' : 'none';
@@ -227,8 +241,23 @@ function bindPeriodBtns() {
     btn.addEventListener('click', async () => {
       document.querySelectorAll('.period-btn').forEach(b => b.className = 'period-btn btn btn-ghost');
       btn.className = 'period-btn btn btn-primary';
-      await loadSummary(btn.dataset.period);
+      const period = btn.dataset.period;
+      const customDates = document.getElementById('summary-custom-dates');
+      if (period === 'custom') {
+        customDates.style.display = 'flex';
+      } else {
+        customDates.style.display = 'none';
+        await loadSummary(period);
+      }
     });
+  });
+
+  document.getElementById('summary-custom-load')?.addEventListener('click', async () => {
+    const start = document.getElementById('summary-start-date').value;
+    const end   = document.getElementById('summary-end-date').value;
+    if (!start || !end) { alert('Please select both From and To dates.'); return; }
+    if (start > end)    { alert('From date must be before To date.'); return; }
+    await loadSummary('custom', start, end);
   });
 }
 
@@ -265,7 +294,6 @@ async function loadStaffSales() {
         · ${d.staff.length} staff member${d.staff.length !== 1 ? 's' : ''}
       </div>
 
-      <!-- Summary KPIs -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:24px;">
         ${kpiCard('Total Revenue', `₦${fmt(totalRevenue)}`, '💰', 'var(--accent-lt)')}
         ${kpiCard('Total Transactions', d.staff.reduce((s,u) => s + u.sales_count, 0), '🧾', 'var(--info)')}
@@ -273,7 +301,6 @@ async function loadStaffSales() {
         ${kpiCard('Staff Members', d.staff.length, '👤', 'var(--warn)')}
       </div>
 
-      <!-- Per-staff breakdown -->
       <div class="card" style="overflow:hidden;">
         <div style="padding:14px 18px;border-bottom:1px solid var(--border);">
           <span style="font-size:13px;font-weight:500;color:var(--text);">👤 Per Staff Breakdown</span>
@@ -322,7 +349,7 @@ async function loadStaffSales() {
 }
 
 // Load summary
-async function loadSummary(period) {
+async function loadSummary(period, startDate = null, endDate = null) {
   const container = document.getElementById('summary-content');
   container.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;padding:40px 0;">
@@ -330,13 +357,21 @@ async function loadSummary(period) {
     </div>`;
 
   try {
-    const d = await api.get(`/reports/summary?period=${period}`);
+    let url = `/reports/summary?period=${period}`;
+    if (period === 'custom' && startDate && endDate) {
+      url += `&start_date=${startDate}&end_date=${endDate}`;
+    }
+    const d = await api.get(url);
     const profitColor = d.profit >= 0 ? 'var(--accent-lt)' : '#f87171';
-    const periodLabel = period.charAt(0).toUpperCase() + period.slice(1);
+    const periodLabel = period === 'custom'
+      ? `${fmtDate(d.date_from)} → ${fmtDate(d.date_to)}`
+      : period.charAt(0).toUpperCase() + period.slice(1);
 
     container.innerHTML = `
       <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">
-        ${periodLabel} report · ${fmtDate(d.date_from)}${d.date_from !== d.date_to ? ' → ' + fmtDate(d.date_to) : ''}
+        ${period === 'custom'
+          ? `Custom range · ${fmtDate(d.date_from)} → ${fmtDate(d.date_to)}`
+          : `${periodLabel} report · ${fmtDate(d.date_from)}${d.date_from !== d.date_to ? ' → ' + fmtDate(d.date_to) : ''}`}
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:24px;">
