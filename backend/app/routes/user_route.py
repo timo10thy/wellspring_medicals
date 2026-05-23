@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
 from app.routes.basemodel import get_db
 from typing import Annotated
+from app.middlewares.admin import admin_validation
 from app.models.users import User
 from app.schema.user_schema import UserCreate, UserResponse
 import logging
@@ -14,7 +15,11 @@ db_dependency= Annotated[Session, Depends(get_db)]
 
 
 @router.post('/user/create', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-def create_user(user_data: UserCreate, db: Session = Depends(get_db)):
+def create_user(
+    user_data: UserCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(admin_validation)
+):
     try:
         
         existing_email = db.query(User).filter(User.email == user_data.email).first()
