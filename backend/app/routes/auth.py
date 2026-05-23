@@ -20,13 +20,13 @@ def login(login_request: LoginRequest, db: Session = Depends(get_db)):
 
     user = db.query(User).filter(User.email == login_request.email).first()
     if not user:
-        raise HTTPException(status_code=400, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not bcrypt.checkpw(
         login_request.password.encode("utf-8"),
         user.password.encode("utf-8")
     ):
-        raise HTTPException(status_code=400, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
     claims = {
         "sub": str(user.id),
