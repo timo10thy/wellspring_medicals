@@ -2,7 +2,7 @@ import { api }                                     from '../js/api.js';
 import { renderSidebar, renderTopbar, bindSidebar,
          openModal, closeModal, bindModalClose,
          fmt, fmtDateTime, icons }                 from '../js/ui.js';
-import { printReceipt, downloadReceiptPDF } from '../js/receipt.js';
+import { printReceipt, downloadReceiptPDF } from './receipt.js';
 //Auth helpers 
 function isAdmin() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
