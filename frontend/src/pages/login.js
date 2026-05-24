@@ -68,7 +68,7 @@ export function renderLogin() {
   </div>`;
 }
 
-// ── Login logic (called after render) ────────────────────────────────────────
+//Login logic (called after render) 
 export function initLogin() {
   const form    = document.getElementById('login-form');
   const btn     = document.getElementById('login-btn');
@@ -123,7 +123,9 @@ export function initLogin() {
 
       navigate('dashboard');
     } catch (err) {
-      errMsg.textContent = err.message;
+      errMsg.textContent = err.message.includes('pending')
+        ? 'Your account is pending admin approval. Contact your administrator.'
+        : 'Invalid email or password.';
       errEl.classList.add('show');
     } finally {
       btn.disabled = false;
