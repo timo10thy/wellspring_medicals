@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from app.models.users import User
 from app.routes.user_route import router as user_route
 from app.routes.auth import router as auth
@@ -11,26 +14,28 @@ from app.routes.expenses import router as expenses
 from app.routes.purchase_receipt import router as purchase_receipts
 from app.routes.dashboard import router as dashboard
 from app.routes.reports import router as reports
-from app.routes.reconciliation import router as reconciliation   
+from app.routes.reconciliation import router as reconciliation
 from app.routes.basemodel import engine
 from app.models.base import Base
 from app.routes.void_requests import router as void_requests_router
 from app.routes.stock_movement import router as stock_movement_router
 from app.routes.shifts import router as shifts_router
-
-# Import new model so create_all picks it up
-from app.models import reconciliation as _recon_model  
-
+from app.models import reconciliation as _recon_model
 import logging
 
 logger = logging.getLogger(__name__)
 Base.metadata.create_all(bind=engine)
+
+limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title="Well Spring App",
     version="1",
     description="Daily transaction"
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

@@ -13,3 +13,4 @@ authlib
 httpx
 alembic==1.13.2
 itsdangerous
+slowapi
