@@ -1,6 +1,3 @@
-// ── Register Page ─────────────────────────────────────────────────────────────
-// POST /user/user/create → UserResponse
-
 import { api }      from '../js/api.js';
 import { navigate } from '../js/router.js';
 
@@ -23,7 +20,7 @@ export function renderRegister() {
 
       <h1 style="font-family:var(--font-head);font-size:28px;color:var(--text);margin-bottom:6px;">Create account</h1>
       <p style="font-size:13px;color:var(--muted);margin-bottom:24px;line-height:1.6;">
-        Register for a standard user account. Admin accounts are created by the system owner.
+        Register for a staff account. Your account will be activated by an admin before you can login.
       </p>
 
       <div id="reg-error" class="banner banner-error">
@@ -32,7 +29,7 @@ export function renderRegister() {
       </div>
       <div id="reg-success" class="banner banner-success">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-        <span>Account created! Redirecting to login…</span>
+        <span>Account created! Your account is pending admin approval. You will be able to login once activated.</span>
       </div>
 
       <form id="reg-form" novalidate style="display:flex;flex-direction:column;gap:13px;">
@@ -61,7 +58,7 @@ export function renderRegister() {
               ['rule-alpha', 'At least one letter'],
               ['rule-upper', 'At least one uppercase letter'],
               ['rule-space', 'Not blank or whitespace-only'],
-            ].map(([id,label]) => `
+            ].map(([id, label]) => `
               <div id="${id}" style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);transition:color .2s;">
                 <span style="width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0;"></span>${label}
               </div>`).join('')}
@@ -88,8 +85,8 @@ export function initRegister() {
   function setField(inputId, hintId, err) {
     const inp  = document.getElementById(inputId);
     const hint = document.getElementById(hintId);
-    inp.classList.remove('input-ok','input-error');
-    hint.classList.remove('hint-ok','hint-error');
+    inp.classList.remove('input-ok', 'input-error');
+    hint.classList.remove('hint-ok', 'hint-error');
     if (err) {
       inp.classList.add('input-error');
       hint.classList.add('hint-error');
@@ -114,16 +111,17 @@ export function initRegister() {
     }
   };
 
-  const hintMap = { 'r-name':'r-name-hint','r-username':'r-username-hint','r-email':'r-email-hint','r-password':'r-pw-hint' };
+  const hintMap = {
+    'r-name': 'r-name-hint', 'r-username': 'r-username-hint',
+    'r-email': 'r-email-hint', 'r-password': 'r-pw-hint'
+  };
 
-  // Blur validation
   Object.entries(validators).forEach(([id, fn]) => {
     document.getElementById(id)?.addEventListener('blur', () => {
       setField(id, hintMap[id], fn(document.getElementById(id).value));
     });
   });
 
-  // Live password rules
   pwInput?.addEventListener('focus', () => { pwRules.style.display = 'flex'; });
   pwInput?.addEventListener('input', () => {
     const v = pwInput.value;
@@ -165,11 +163,10 @@ export function initRegister() {
 
       document.getElementById('reg-success').classList.add('show');
       e.target.reset();
-      ['r-name','r-username','r-email','r-password'].forEach(id =>
-        document.getElementById(id)?.classList.remove('input-ok','input-error'));
+      ['r-name', 'r-username', 'r-email', 'r-password'].forEach(id =>
+        document.getElementById(id)?.classList.remove('input-ok', 'input-error'));
       pwRules.style.display = 'none';
 
-      setTimeout(() => navigate('login'), 1500);
     } catch (err) {
       document.getElementById('reg-error-msg').textContent = err.message;
       document.getElementById('reg-error').classList.add('show');
