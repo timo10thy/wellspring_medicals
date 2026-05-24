@@ -2,8 +2,8 @@ import { api }                                     from '../js/api.js';
 import { renderSidebar, renderTopbar, bindSidebar,
          openModal, closeModal, bindModalClose,
          fmt, fmtDateTime, icons }                 from '../js/ui.js';
-
-// ── Auth helpers ──────────────────────────────────────────────────────────────
+import { printReceipt, downloadReceiptPDF } from '../js/receipt.js';
+//Auth helpers 
 function isAdmin() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   return user.role === 'ADMIN';
@@ -13,13 +13,13 @@ function currentUsername() {
   return user.username || '';
 }
 
-// ── Module state ──────────────────────────────────────────────────────────────
+// Module state 
 let cart              = [];
 let pendingVoidSaleId = null;
 let pendingVoidReqId  = null;
-let activeShift       = null;   // null = no open shift for this user
+let activeShift       = null;
 
-// ── Render ────────────────────────────────────────────────────────────────────
+// Render 
 export function renderSales() {
   return `
   <div class="page-enter app-layout">
@@ -28,31 +28,27 @@ export function renderSales() {
       ${renderTopbar('Sales', 'Record sales and issue receipts')}
       <div class="page-body">
 
-        <!-- Shift status banner (staff only, injected by initSales) -->
         ${!isAdmin() ? `<div id="shift-status-banner" style="margin-bottom:20px;"></div>` : ''}
 
-        <!-- New Sale button -->
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
           <p style="font-size:13px;color:var(--muted)">Record a new sale or look up an existing receipt.</p>
           <button id="new-sale-btn" class="btn btn-primary">${icons.plus} New Sale</button>
         </div>
 
-        <!-- Admin: Pending Void Requests -->
         <div id="void-requests-section" style="display:none;margin-bottom:24px;">
           <div class="card" style="padding:20px;">
             <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:14px;">
-              ⚠ Pending Void Requests
+              Pending Void Requests
             </div>
             <div id="void-requests-list"></div>
           </div>
         </div>
 
-        <!-- Receipt lookup -->
         <div class="card" style="padding:20px;">
           <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:14px;">${icons.receipt} Look Up Receipt</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <input class="field-input" id="receipt-id" type="number" min="1"
-              placeholder="Enter sale ID…" style="max-width:220px;"/>
+              placeholder="Enter sale ID..." style="max-width:220px;"/>
             <button id="receipt-btn" class="btn btn-ghost">${icons.search} Find</button>
           </div>
           <div id="receipt-result" style="margin-top:16px;display:none;"></div>
@@ -62,7 +58,7 @@ export function renderSales() {
     </div>
   </div>
 
-  <!-- ── New Sale Modal ── -->
+  <!-- New Sale Modal -->
   <div id="new-sale-modal" class="modal-backdrop">
     <div class="modal" style="max-width:620px;max-height:92vh;overflow-y:auto;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
@@ -75,7 +71,7 @@ export function renderSales() {
 
       <div style="display:flex;gap:8px;margin-bottom:14px;">
         <input class="field-input" id="ns-product-search" type="text"
-          placeholder="Search product name to add…" style="flex:1;"/>
+          placeholder="Search product name to add..." style="flex:1;"/>
         <button id="ns-search-btn" class="btn btn-ghost">${icons.search} Search</button>
       </div>
       <p class="field-hint hint-error" id="ns-search-hint" style="margin-bottom:8px;"></p>
@@ -90,7 +86,7 @@ export function renderSales() {
         <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:14px;margin-bottom:16px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <span style="font-size:12px;color:var(--muted);">Grand Total</span>
-            <span id="cart-grand-total" style="font-family:var(--font-head);font-size:26px;color:var(--accent-lt);">₦0.00</span>
+            <span id="cart-grand-total" style="font-family:var(--font-head);font-size:26px;color:var(--accent-lt);">0.00</span>
           </div>
         </div>
         <div style="display:flex;gap:10px;justify-content:flex-end;">
@@ -105,7 +101,7 @@ export function renderSales() {
     </div>
   </div>
 
-  <!-- ── Void Request Modal (staff) ── -->
+  <!-- Void Request Modal (staff) -->
   <div id="void-request-modal" class="modal-backdrop">
     <div class="modal" style="max-width:400px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
@@ -126,7 +122,7 @@ export function renderSales() {
     </div>
   </div>
 
-  <!-- ── Admin Void Modal (instant) ── -->
+  <!-- Admin Void Modal (instant) -->
   <div id="void-modal" class="modal-backdrop">
     <div class="modal" style="max-width:400px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
@@ -148,7 +144,7 @@ export function renderSales() {
     </div>
   </div>
 
-  <!-- ── Reject Void Request Modal (admin) ── -->
+  <!-- Reject Void Request Modal (admin) -->
   <div id="reject-modal" class="modal-backdrop">
     <div class="modal" style="max-width:400px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
@@ -167,7 +163,7 @@ export function renderSales() {
   </div>`;
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+// Init 
 export async function initSales() {
   bindSidebar();
   bindModalClose('new-sale-modal');
@@ -175,12 +171,10 @@ export async function initSales() {
   bindModalClose('void-request-modal');
   bindModalClose('reject-modal');
 
-  // Staff: load shift status first, then render banner
   if (!isAdmin()) {
     await loadMyShift();
   }
 
-  // "New Sale" button — gate on shift for staff
   document.getElementById('new-sale-btn')?.addEventListener('click', () => {
     if (!isAdmin() && !activeShift) {
       promptOpenShift();
@@ -206,14 +200,13 @@ export async function initSales() {
     if (e.key === 'Enter') document.getElementById('receipt-btn')?.click();
   });
 
-  // ── Admin instant void confirm ──
   document.getElementById('void-confirm-btn')?.addEventListener('click', async () => {
     const btn    = document.getElementById('void-confirm-btn');
     const errEl  = document.getElementById('void-error');
     const reason = document.getElementById('void-reason').value.trim();
     errEl.classList.remove('show');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Voiding…';
+    btn.innerHTML = '<span class="spinner"></span> Voiding...';
     try {
       await api.delete(`/sales/${pendingVoidSaleId}/void`, { reason });
       closeModal('void-modal');
@@ -228,14 +221,13 @@ export async function initSales() {
     }
   });
 
-  // ── Staff void request confirm ──
   document.getElementById('void-request-confirm-btn')?.addEventListener('click', async () => {
     const btn    = document.getElementById('void-request-confirm-btn');
     const errEl  = document.getElementById('void-request-error');
     const reason = document.getElementById('void-request-reason').value.trim();
     errEl.classList.remove('show');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Submitting…';
+    btn.innerHTML = '<span class="spinner"></span> Submitting...';
     try {
       await api.post(`/sales/${pendingVoidSaleId}/void-request`, { reason });
       closeModal('void-request-modal');
@@ -249,12 +241,11 @@ export async function initSales() {
     }
   });
 
-  // ── Admin reject confirm ──
   document.getElementById('reject-confirm-btn')?.addEventListener('click', async () => {
     const btn    = document.getElementById('reject-confirm-btn');
     const reason = document.getElementById('reject-reason').value.trim();
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Rejecting…';
+    btn.innerHTML = '<span class="spinner"></span> Rejecting...';
     try {
       await api.patch(`/sales/void-requests/${pendingVoidReqId}/reject`, { reason });
       closeModal('reject-modal');
@@ -267,13 +258,11 @@ export async function initSales() {
     }
   });
 
-  // Load pending void requests for admins
   if (isAdmin()) loadVoidRequests();
 }
 
-// ── Shift helpers (staff only) ────────────────────────────────────────────────
+// Shift helpers (staff only) 
 
-// Fetch the user's active shift and render the status banner
 async function loadMyShift() {
   try {
     const data  = await api.get('/shifts/my-shift');
@@ -284,34 +273,31 @@ async function loadMyShift() {
   renderShiftBanner();
 }
 
-// Render a compact shift status banner above the page actions
 function renderShiftBanner() {
   const banner = document.getElementById('shift-status-banner');
   if (!banner) return;
 
   if (activeShift) {
-    // Green: shift open — show sales so far and a close hint
     banner.innerHTML = `
       <div class="card" style="padding:14px 18px;border-left:3px solid var(--accent);display:flex;
            align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
         <div>
           <div style="font-size:13px;font-weight:500;color:var(--text);">
-            🟢 Shift #${activeShift.id} — Active
+            Shift #${activeShift.id} - Active
           </div>
           <div style="font-size:11px;color:var(--muted);margin-top:2px;">
-            Opened: ${fmtDateTime(activeShift.opened_at)} &nbsp;·&nbsp;
-            Sales so far: <strong style="color:var(--accent-lt);">₦${fmt(activeShift.sales_so_far)}</strong>
+            Opened: ${fmtDateTime(activeShift.opened_at)} &nbsp;&middot;&nbsp;
+            Sales so far: <strong style="color:var(--accent-lt);">${fmt(activeShift.sales_so_far)}</strong>
           </div>
         </div>
         <span style="font-size:11px;color:var(--muted);">Go to <strong>Shifts</strong> to close your shift.</span>
       </div>`;
   } else {
-    // Amber: no open shift — prompt to open one
     banner.innerHTML = `
       <div class="card" style="padding:14px 18px;border-left:3px solid #f59e0b;display:flex;
            align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
         <div>
-          <div style="font-size:13px;font-weight:500;color:var(--text);">⚠ No active shift</div>
+          <div style="font-size:13px;font-weight:500;color:var(--text);">No active shift</div>
           <div style="font-size:11px;color:var(--muted);margin-top:2px;">
             You must open a shift before you can record sales.
           </div>
@@ -324,13 +310,10 @@ function renderShiftBanner() {
   }
 }
 
-// Called when user clicks "New Sale" with no open shift — scrolls to banner
-// and briefly highlights it instead of silently doing nothing
 function promptOpenShift() {
   const banner = document.getElementById('shift-status-banner');
   if (!banner) return;
   banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  // Pulse the border to draw attention
   banner.style.transition = 'opacity 0.15s';
   banner.style.opacity    = '0.4';
   setTimeout(() => { banner.style.opacity = '1'; }, 150);
@@ -338,15 +321,14 @@ function promptOpenShift() {
   setTimeout(() => { banner.style.opacity = '1'; }, 500);
 }
 
-// Open shift inline from the banner button
 async function openShiftFromBanner() {
   const btn = document.getElementById('banner-open-shift-btn');
   if (!btn) return;
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Opening…';
+  btn.innerHTML = '<span class="spinner"></span> Opening...';
   try {
     await api.post('/shifts/open');
-    await loadMyShift();          // refreshes activeShift + re-renders banner
+    await loadMyShift();
   } catch (err) {
     alert(err.message);
     btn.disabled = false;
@@ -354,7 +336,7 @@ async function openShiftFromBanner() {
   }
 }
 
-// ── Load pending void requests (admin) ───────────────────────────────────────
+// Load pending void requests (admin) 
 async function loadVoidRequests() {
   const section = document.getElementById('void-requests-section');
   const listEl  = document.getElementById('void-requests-list');
@@ -371,10 +353,10 @@ async function loadVoidRequests() {
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <div>
             <div style="font-size:13px;font-weight:500;color:var(--text);">
-              Sale #${vr.sale_id} — ₦${fmt(vr.total_amount)}
+              Sale #${vr.sale_id} - ${fmt(vr.total_amount)}
             </div>
             <div style="font-size:11px;color:var(--muted);margin-top:2px;">
-              Requested by <strong>${vr.requested_by}</strong> · ${vr.created_at?.slice(0,10)}
+              Requested by <strong>${vr.requested_by}</strong> &middot; ${vr.created_at?.slice(0,10)}
             </div>
             ${vr.reason ? `<div style="font-size:12px;color:var(--text);margin-top:4px;">
               Reason: "${vr.reason}"</div>` : ''}
@@ -382,17 +364,16 @@ async function loadVoidRequests() {
           <div style="display:flex;gap:8px;">
             <button class="btn btn-ghost approve-void-btn" data-req-id="${vr.void_request_id}" data-sale-id="${vr.sale_id}"
               style="font-size:12px;color:#16a34a;border-color:#16a34a;">
-              ✓ Approve
+              Approve
             </button>
             <button class="btn btn-ghost reject-void-btn" data-req-id="${vr.void_request_id}"
               style="font-size:12px;color:#dc2626;border-color:#dc2626;">
-              ✕ Reject
+              Reject
             </button>
           </div>
         </div>
       </div>`).join('');
 
-    // Bind approve
     listEl.querySelectorAll('.approve-void-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm(`Approve void for Sale #${btn.dataset.saleId}? Stock will be restored.`)) return;
@@ -404,12 +385,11 @@ async function loadVoidRequests() {
         } catch (err) {
           alert(err.message);
           btn.disabled = false;
-          btn.innerHTML = '✓ Approve';
+          btn.innerHTML = 'Approve';
         }
       });
     });
 
-    // Bind reject
     listEl.querySelectorAll('.reject-void-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         pendingVoidReqId = btn.dataset.reqId;
@@ -423,7 +403,7 @@ async function loadVoidRequests() {
   }
 }
 
-// ── Modal helpers ─────────────────────────────────────────────────────────────
+// Modal helpers 
 function resetSaleModal() {
   cart = [];
   document.getElementById('ns-product-search').value         = '';
@@ -435,7 +415,7 @@ function resetSaleModal() {
   renderCart();
 }
 
-// ── Search product ────────────────────────────────────────────────────────────
+// Search product 
 async function searchProduct() {
   const query = document.getElementById('ns-product-search').value.trim();
   const hint  = document.getElementById('ns-search-hint');
@@ -489,7 +469,7 @@ async function searchProduct() {
   }
 }
 
-// ── Add to cart ───────────────────────────────────────────────────────────────
+// Add to cart 
 async function addToCart(productId, productName, availableQty) {
   const errEl = document.getElementById('ns-error');
   errEl.classList.remove('show');
@@ -522,7 +502,7 @@ async function addToCart(productId, productName, availableQty) {
   }
 }
 
-// ── Render cart ───────────────────────────────────────────────────────────────
+// Render cart 
 function renderCart() {
   const cartSection = document.getElementById('cart-section');
   const emptyHint   = document.getElementById('cart-empty-hint');
@@ -539,11 +519,11 @@ function renderCart() {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <span style="font-size:13px;font-weight:500;color:var(--text);">${item.product_name}</span>
         <button class="btn btn-ghost remove-cart-item" data-idx="${idx}"
-          style="font-size:11px;padding:3px 8px;color:#f87171;">✕ Remove</button>
+          style="font-size:11px;padding:3px 8px;color:#f87171;">Remove</button>
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <div style="font-size:12px;color:var(--muted);">
-          Unit price: <strong style="color:var(--text);">₦${fmt(item.selling_price)}</strong>
+          Unit price: <strong style="color:var(--text);">${fmt(item.selling_price)}</strong>
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
           <label style="font-size:12px;color:var(--muted);">Qty:</label>
@@ -553,7 +533,7 @@ function renderCart() {
           <span style="font-size:11px;color:var(--muted);">/ ${item.available_qty}</span>
         </div>
         <div style="font-size:13px;font-weight:500;color:var(--accent-lt);margin-left:auto;">
-          ₦${fmt(item.qty * item.selling_price)}
+          ${fmt(item.qty * item.selling_price)}
         </div>
       </div>
     </div>`).join('');
@@ -591,10 +571,10 @@ function renderCart() {
 
 function updateGrandTotal() {
   const total = cart.reduce((sum, i) => sum + i.qty * i.selling_price, 0);
-  document.getElementById('cart-grand-total').textContent = `₦${fmt(total)}`;
+  document.getElementById('cart-grand-total').textContent = `${fmt(total)}`;
 }
 
-// ── Submit sale ───────────────────────────────────────────────────────────────
+// Submit sale 
 async function submitSale() {
   const errEl  = document.getElementById('ns-error');
   const sucEl  = document.getElementById('ns-success');
@@ -603,7 +583,6 @@ async function submitSale() {
   errEl.classList.remove('show');
   sucEl.classList.remove('show');
 
-  // Safety net: re-verify shift is still open before submitting
   if (!isAdmin() && !activeShift) {
     errEl.querySelector('span').textContent = 'No active shift. Please open a shift before recording a sale.';
     errEl.classList.add('show');
@@ -622,7 +601,7 @@ async function submitSale() {
     return;
   }
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Processing…';
+  btn.innerHTML = '<span class="spinner"></span> Processing...';
   try {
     const receipt = await api.post('/sales/create', {
       items: cart.map(i => ({
@@ -631,14 +610,17 @@ async function submitSale() {
         selling_price: i.selling_price,
       })),
     });
-    sucMsg.innerHTML = `Sale recorded! Receipt #${receipt.receipt_id} — Total: ₦${fmt(receipt.grand_total)}
-      <span style="color:var(--accent-lt);cursor:pointer;text-decoration:underline;margin-left:8px;"
-        id="view-receipt-link">View Receipt</span>`;
+    sucMsg.innerHTML = `Sale recorded! Receipt #${receipt.receipt_id} - Total: ${fmt(receipt.grand_total)}
+    <span style="color:var(--accent-lt);cursor:pointer;text-decoration:underline;margin-left:8px;"
+      id="view-receipt-link">View Receipt</span>`;
     sucEl.classList.add('show');
     cart = [];
     renderCart();
-    // Refresh shift totals in the banner so "sales so far" stays accurate
     if (!isAdmin()) loadMyShift();
+
+    // Auto-print receipt
+    printReceipt(receipt);
+
     setTimeout(() => {
       document.getElementById('view-receipt-link')?.addEventListener('click', () => {
         closeModal('new-sale-modal');
@@ -655,12 +637,12 @@ async function submitSale() {
   }
 }
 
-// ── Receipt lookup ────────────────────────────────────────────────────────────
+// Receipt lookup 
 async function fetchReceipt(id) {
   const container = document.getElementById('receipt-result');
   container.style.display = 'block';
   container.innerHTML = `<div style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;">
-    <span class="spinner" style="border-top-color:var(--accent)"></span> Loading receipt…</div>`;
+    <span class="spinner" style="border-top-color:var(--accent)"></span> Loading receipt...</div>`;
   try {
     const r = await api.get(`/sales/${id}/salesreceipt`);
 
@@ -695,7 +677,7 @@ async function fetchReceipt(id) {
       actionHtml = `
         <div style="margin-top:12px;padding:10px 14px;background:#fef3c7;border:1px solid #fde68a;
                     border-radius:8px;font-size:13px;color:#92400e;">
-          ⏳ A void request is pending admin approval.
+          A void request is pending admin approval.
         </div>`;
     }
 
@@ -714,10 +696,10 @@ async function fetchReceipt(id) {
                       padding:10px 14px;margin-bottom:8px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
               <span style="font-size:13px;font-weight:500;color:var(--text);">${item.product_name}</span>
-              <span style="font-size:13px;font-weight:500;color:var(--accent-lt);">₦${fmt(item.total_amount)}</span>
+              <span style="font-size:13px;font-weight:500;color:var(--accent-lt);">${fmt(item.total_amount)}</span>
             </div>
             <div style="font-size:11px;color:var(--muted);">
-              ${item.quantity_sold} × ₦${fmt(item.unit_price)}
+              ${item.quantity_sold} x ${fmt(item.unit_price)}
             </div>
           </div>`).join('')}
 
@@ -725,20 +707,34 @@ async function fetchReceipt(id) {
                     padding:12px 0 0;border-top:1px solid var(--border);margin-top:8px;">
           <span style="font-size:13px;font-weight:500;color:var(--text);">Grand Total</span>
           <strong style="font-family:var(--font-head);font-size:20px;color:var(--accent-lt);">
-            ₦${fmt(r.grand_total)}
+            ${fmt(r.grand_total)}
           </strong>
         </div>
 
         ${r.is_voided ? `
           <div style="margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;
                        border-radius:8px;color:#dc2626;font-size:13px;font-weight:500;">
-            ⚠ Voided${r.voided_by ? ` by ${r.voided_by}` : ''}${r.void_reason ? ` — "${r.void_reason}"` : ''}
+            Voided${r.voided_by ? ` by ${r.voided_by}` : ''}${r.void_reason ? ` - "${r.void_reason}"` : ''}
           </div>` : ''}
+
+        <!-- Print / Download buttons -->
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+          <button id="print-receipt-btn" class="btn btn-ghost" style="font-size:12px;flex:1;">
+            Print
+          </button>
+          <button id="download-receipt-btn" class="btn btn-ghost" style="font-size:12px;flex:1;">
+            Download PDF
+          </button>
+        </div>
 
         ${actionHtml}
       </div>`;
 
-    // Bind buttons after render
+    // ── Print / Download (always bound, regardless of void state) ──
+    document.getElementById('print-receipt-btn')?.addEventListener('click', () => printReceipt(r));
+    document.getElementById('download-receipt-btn')?.addEventListener('click', () => downloadReceiptPDF(r));
+
+    // ── Admin instant void ──
     document.getElementById(`void-btn-${id}`)?.addEventListener('click', () => {
       pendingVoidSaleId = id;
       document.getElementById('void-reason').value = '';
@@ -746,6 +742,7 @@ async function fetchReceipt(id) {
       openModal('void-modal');
     });
 
+    // ── Staff void request ──
     document.getElementById(`void-request-btn-${id}`)?.addEventListener('click', () => {
       pendingVoidSaleId = id;
       document.getElementById('void-request-reason').value = '';
