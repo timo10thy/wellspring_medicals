@@ -1,5 +1,6 @@
 import { api } from '../js/api.js';
-import { generateTxnId, queueSale, getPendingCount, syncPendingSales, getFailedSales, discardSale } from '../js/offline.js';
+import { generateTxnId, queueSale, getPendingCount, syncPendingSales, getFailedSales,
+         discardSale, cacheProducts, searchProductsOffline, getCachedProduct } from '../js/offline.js';
 import { renderSidebar, renderTopbar, bindSidebar,
          openModal, closeModal, bindModalClose,
          fmt, fmtDateTime, icons } from '../js/ui.js';
@@ -47,8 +48,7 @@ export function renderSales() {
 
         <!-- Sync banner -->
         <div id="sync-banner" style="display:none;margin-bottom:16px;">
-          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;
-                      padding:12px 16px;">
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;">
             <div id="sync-banner-msg" style="font-size:13px;font-weight:500;color:#166534;">
               Syncing offline sales...
             </div>
@@ -206,8 +206,17 @@ export async function initSales() {
   bindModalClose('void-request-modal');
   bindModalClose('reject-modal');
 
-  // Init offline mode first
   initOfflineMode();
+
+  // Cache products while online for offline search
+  if (navigator.onLine) {
+    try {
+      const products = await api.get('/stock/stock/total/search?product_name=');
+      if (products?.length) cacheProducts(products);
+    } catch {
+      // Silently fail — cache may already exist
+    }
+  }
 
   if (!isAdmin()) {
     await loadMyShift();
@@ -299,7 +308,7 @@ export async function initSales() {
   if (isAdmin()) loadVoidRequests();
 }
 
-// ── Offline mode ─────────────────────────────────────────────────────────────
+// ── Offline mode ──────────────────────────────────────────────────────────────
 
 function initOfflineMode() {
   updateOfflineBanner();
@@ -307,6 +316,11 @@ function initOfflineMode() {
 
   window.addEventListener('online', async () => {
     updateOfflineBanner();
+    // Refresh product cache now that we're back online
+    try {
+      const products = await api.get('/stock/stock/total/search?product_name=');
+      if (products?.length) cacheProducts(products);
+    } catch {}
     await syncOfflineSales();
     renderFailedSales();
   });
@@ -381,21 +395,13 @@ async function renderFailedSales() {
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
         <div>
           <div style="font-size:13px;font-weight:500;color:var(--text);">
-            Offline Sale — ${entry.items.length} item${entry.items.length > 1 ? 's' : ''}
+            Offline Sale — ${entry.items?.length || 0} item${entry.items?.length !== 1 ? 's' : ''}
           </div>
           <div style="font-size:11px;color:var(--muted);margin-top:2px;">
-            Queued: ${new Date(entry.created_at).toLocaleString()} &middot;
-            Attempts: ${entry.attempts}/${3}
-          </div>
-          <div style="font-size:12px;color:#dc2626;margin-top:4px;">
-            Error: ${entry.last_error || 'Unknown error'}
+            Queued: ${new Date(entry.queued_at).toLocaleString()}
           </div>
         </div>
         <div style="display:flex;gap:8px;">
-          <button class="btn btn-ghost retry-failed-btn" data-txn="${entry.txn_id}"
-            style="font-size:12px;color:#16a34a;border-color:#16a34a;">
-            Retry
-          </button>
           <button class="btn btn-ghost discard-failed-btn" data-txn="${entry.txn_id}"
             style="font-size:12px;color:#dc2626;border-color:#dc2626;">
             Discard
@@ -403,21 +409,6 @@ async function renderFailedSales() {
         </div>
       </div>
     </div>`).join('');
-
-  listEl.querySelectorAll('.retry-failed-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      // Reset to pending so sync engine picks it up
-      const db = await import('../js/offline.js');
-      const all = await db.getAllQueued();
-      const entry = all.find(e => e.txn_id === btn.dataset.txn);
-      if (!entry) return;
-      // Reset attempts and status so it retries
-      const { putRecord } = await openDBForRetry();
-      await syncOfflineSales();
-      renderFailedSales();
-      updateOfflineBanner();
-    });
-  });
 
   listEl.querySelectorAll('.discard-failed-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -595,15 +586,29 @@ async function searchProduct() {
   hint.textContent = '';
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner" style="border-top-color:var(--accent)"></span>';
+
   try {
-    const results = await api.get(`/stock/total/search?product_name=${encodeURIComponent(query)}`);
-    const listEl  = document.getElementById('ns-results-list');
-    const resEl   = document.getElementById('ns-search-results');
-    if (!results.length) {
-      hint.textContent = 'No products found.';
-      resEl.style.display = 'none';
-      return;
+    let results;
+
+    if (!navigator.onLine) {
+      // Use cached products when offline
+      results = searchProductsOffline(query);
+      if (!results.length) {
+        hint.textContent = 'No products found in offline cache.';
+        document.getElementById('ns-search-results').style.display = 'none';
+        return;
+      }
+    } else {
+      results = await api.get(`/stock/total/search?product_name=${encodeURIComponent(query)}`);
+      if (!results.length) {
+        hint.textContent = 'No products found.';
+        document.getElementById('ns-search-results').style.display = 'none';
+        return;
+      }
     }
+
+    const listEl = document.getElementById('ns-results-list');
+    const resEl  = document.getElementById('ns-search-results');
     resEl.style.display = 'block';
     listEl.innerHTML = results.map(p => `
       <div class="product-result-item"
@@ -654,13 +659,26 @@ async function addToCart(productId, productName, availableQty) {
     return;
   }
   try {
-    const details   = await api.get(`/product/${productId}/details`);
-    const stockData = await api.get(`/stock/by-product/${productId}`);
+    let selling_price, stock_id;
+
+    if (!navigator.onLine) {
+      // Use cached product data when offline
+      const cached = getCachedProduct(productId);
+      if (!cached) throw new Error('Product not found in offline cache.');
+      selling_price = parseFloat(cached.price || cached.selling_price);
+      stock_id      = cached.stock_id;
+    } else {
+      const details   = await api.get(`/product/${productId}/details`);
+      const stockData = await api.get(`/stock/by-product/${productId}`);
+      selling_price   = parseFloat(details.price);
+      stock_id        = stockData.id;
+    }
+
     cart.push({
       product_id:    productId,
       product_name:  productName,
-      stock_id:      stockData.id,
-      selling_price: parseFloat(details.price),
+      stock_id,
+      selling_price,
       available_qty: availableQty,
       qty:           1,
     });
@@ -784,7 +802,7 @@ async function submitSale() {
     selling_price: i.selling_price,
   }));
 
-  // ── Offline: queue the sale and show confirmation ──
+  // Offline: queue the sale
   if (!navigator.onLine) {
     await queueSale(txn_id, items);
     cart = [];
@@ -797,7 +815,7 @@ async function submitSale() {
     return;
   }
 
-  // ── Online: submit normally with txn_id for deduplication ──
+  // Online: submit with txn_id for deduplication
   try {
     const receipt = await api.post('/sales/create', { txn_id, items });
     sucMsg.innerHTML = `Sale recorded! Receipt #${receipt.receipt_id} - Total: ${fmt(receipt.grand_total)}
@@ -807,9 +825,7 @@ async function submitSale() {
     cart = [];
     renderCart();
     if (!isAdmin()) loadMyShift();
-
     printReceipt(receipt);
-
     setTimeout(() => {
       document.getElementById('view-receipt-link')?.addEventListener('click', () => {
         closeModal('new-sale-modal');
