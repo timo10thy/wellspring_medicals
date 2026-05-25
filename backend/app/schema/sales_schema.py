@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
 
-# ── Existing schemas (unchanged) ──────────────────────────────────────────────
+# Existing schemas (unchanged)
 class SaleCreate(BaseModel):
     stock_id: int
     quantity_sold: int
@@ -24,7 +24,7 @@ class ReceiptResponse(BaseModel):
     unit_price: float
     total_amount: float
 
-# ── New schemas for multi-item sales ─────────────────────────────────────────
+# Multi-item sales schemas
 class SaleItemCreate(BaseModel):
     stock_id: int
     quantity_sold: int
@@ -32,6 +32,7 @@ class SaleItemCreate(BaseModel):
 
 class MultiSaleCreate(BaseModel):
     items: list[SaleItemCreate]
+    txn_id: Optional[str] = None  
 
 class SaleItemResponse(BaseModel):
     sale_id: int

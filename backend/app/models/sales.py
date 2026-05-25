@@ -21,6 +21,9 @@ class Sales(Base):
     voided_by = Column(String(100), nullable=True)
     voided_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Offline deduplication
+    txn_id = Column(String(36), nullable=True, unique=True, index=True)
+
     stock = relationship("Stocks", back_populates="sales")
     sold_by_user = relationship("User", foreign_keys="Sales.sold_by", back_populates="sold_sales")
     created_by_user = relationship("User", foreign_keys="Sales.created_by", back_populates="created_sales")

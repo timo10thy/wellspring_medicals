@@ -29,8 +29,33 @@ def create_sales(
     if not sales_data.items:
         raise HTTPException(status_code=400, detail="At least one item is required")
 
+    # Deduplication: if txn_id already exists, return existing receipt
+    if sales_data.txn_id:
+        existing = db.query(Sales).filter(Sales.txn_id == sales_data.txn_id).first()
+        if existing:
+            logger.info(f"Duplicate txn_id {sales_data.txn_id} — returning existing sale #{existing.id}")
+            staff = db.query(User).filter(User.id == existing.sold_by).first()
+            stock = existing.stock
+            product = stock.product
+            return {
+                "receipt_id": existing.id,
+                "sold_by": staff.user_name if staff else "—",
+                "items": [
+                    {
+                        "sale_id": existing.id,
+                        "product_name": product.name,
+                        "quantity_sold": existing.quantity_sold,
+                        "unit_price": float(existing.selling_price),
+                        "total_amount": float(existing.total_amount),
+                    }
+                ],
+                "grand_total": float(existing.total_amount),
+                "created_at": existing.created_at,
+                "deduplicated": True,
+            }
+
     created_sales = []
-    movement_logs = []  # collect before commit
+    movement_logs = []
 
     try:
         for item in sales_data.items:
@@ -62,14 +87,14 @@ def create_sales(
                 quantity_sold=item.quantity_sold,
                 selling_price=item.selling_price,
                 total_amount=total_amount,
-                created_by=current_user.id
+                created_by=current_user.id,
+                txn_id=sales_data.txn_id if sales_data.txn_id else None,
             )
 
             stock.quantity -= item.quantity_sold
             db.add(sale)
             created_sales.append((sale, product.name))
 
-            # Store movement info for after commit
             movement_logs.append({
                 "stock": stock,
                 "qty_before": qty_before,
@@ -81,7 +106,6 @@ def create_sales(
         for sale, _ in created_sales:
             db.refresh(sale)
 
-        # Log movements after commit so sale IDs exist
         for i, log in enumerate(movement_logs):
             sale_id = created_sales[i][0].id
             log_movement(

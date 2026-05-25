@@ -1,9 +1,11 @@
-import { api }                                     from '../js/api.js';
+import { api } from '../js/api.js';
+import { generateTxnId, queueSale, getPendingCount, syncPendingSales, getFailedSales, discardSale } from '../js/offline.js';
 import { renderSidebar, renderTopbar, bindSidebar,
          openModal, closeModal, bindModalClose,
-         fmt, fmtDateTime, icons }                 from '../js/ui.js';
+         fmt, fmtDateTime, icons } from '../js/ui.js';
 import { printReceipt, downloadReceiptPDF } from './receipt.js';
-//Auth helpers 
+
+// Auth helpers
 function isAdmin() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   return user.role === 'ADMIN';
@@ -13,13 +15,13 @@ function currentUsername() {
   return user.username || '';
 }
 
-// Module state 
+// Module state
 let cart              = [];
 let pendingVoidSaleId = null;
 let pendingVoidReqId  = null;
 let activeShift       = null;
 
-// Render 
+// Render
 export function renderSales() {
   return `
   <div class="page-enter app-layout">
@@ -29,6 +31,39 @@ export function renderSales() {
       <div class="page-body">
 
         ${!isAdmin() ? `<div id="shift-status-banner" style="margin-bottom:20px;"></div>` : ''}
+
+        <!-- Offline banner -->
+        <div id="offline-banner" style="display:none;margin-bottom:16px;">
+          <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;
+                      padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-size:13px;font-weight:500;color:#92400e;">You are offline</div>
+              <div id="offline-queue-count" style="font-size:11px;color:#92400e;margin-top:2px;">
+                Sales will be saved and synced when you reconnect.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sync banner -->
+        <div id="sync-banner" style="display:none;margin-bottom:16px;">
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;
+                      padding:12px 16px;">
+            <div id="sync-banner-msg" style="font-size:13px;font-weight:500;color:#166534;">
+              Syncing offline sales...
+            </div>
+          </div>
+        </div>
+
+        <!-- Failed sales panel -->
+        <div id="failed-sales-section" style="display:none;margin-bottom:24px;">
+          <div class="card" style="padding:20px;">
+            <div style="font-size:13px;font-weight:500;color:#dc2626;margin-bottom:14px;">
+              Offline Sales Failed to Sync
+            </div>
+            <div id="failed-sales-list"></div>
+          </div>
+        </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
           <p style="font-size:13px;color:var(--muted)">Record a new sale or look up an existing receipt.</p>
@@ -66,7 +101,7 @@ export function renderSales() {
         <button data-close-modal class="btn btn-ghost" style="padding:6px 10px;">${icons.x}</button>
       </div>
 
-      <div id="ns-error"   class="banner banner-error"><span></span></div>
+      <div id="ns-error" class="banner banner-error"><span></span></div>
       <div id="ns-success" class="banner banner-success"><span id="ns-success-msg">Sale recorded!</span></div>
 
       <div style="display:flex;gap:8px;margin-bottom:14px;">
@@ -163,13 +198,16 @@ export function renderSales() {
   </div>`;
 }
 
-// Init 
+// Init
 export async function initSales() {
   bindSidebar();
   bindModalClose('new-sale-modal');
   bindModalClose('void-modal');
   bindModalClose('void-request-modal');
   bindModalClose('reject-modal');
+
+  // Init offline mode first
+  initOfflineMode();
 
   if (!isAdmin()) {
     await loadMyShift();
@@ -261,7 +299,137 @@ export async function initSales() {
   if (isAdmin()) loadVoidRequests();
 }
 
-// Shift helpers (staff only) 
+// ── Offline mode ─────────────────────────────────────────────────────────────
+
+function initOfflineMode() {
+  updateOfflineBanner();
+  renderFailedSales();
+
+  window.addEventListener('online', async () => {
+    updateOfflineBanner();
+    await syncOfflineSales();
+    renderFailedSales();
+  });
+
+  window.addEventListener('offline', () => {
+    updateOfflineBanner();
+  });
+}
+
+async function updateOfflineBanner() {
+  const banner = document.getElementById('offline-banner');
+  const count  = document.getElementById('offline-queue-count');
+  if (!banner) return;
+
+  const pending = await getPendingCount();
+
+  if (!navigator.onLine) {
+    banner.style.display = 'block';
+    count.textContent = pending > 0
+      ? `${pending} sale${pending > 1 ? 's' : ''} queued — will sync when reconnected.`
+      : 'Sales will be saved and synced when you reconnect.';
+  } else {
+    banner.style.display = pending > 0 ? 'block' : 'none';
+    if (pending > 0) {
+      count.textContent = `${pending} offline sale${pending > 1 ? 's' : ''} pending sync...`;
+    }
+  }
+}
+
+async function syncOfflineSales() {
+  const syncBanner = document.getElementById('sync-banner');
+  const syncMsg    = document.getElementById('sync-banner-msg');
+  const pending    = await getPendingCount();
+  if (!pending) return;
+
+  if (syncBanner) syncBanner.style.display = 'block';
+  if (syncMsg)    syncMsg.textContent = `Syncing ${pending} offline sale${pending > 1 ? 's' : ''}...`;
+
+  const { synced, failed } = await syncPendingSales(
+    (payload) => api.post('/sales/create', payload),
+    (done, total) => {
+      if (syncMsg) syncMsg.textContent = `Syncing... ${done}/${total}`;
+    }
+  );
+
+  if (syncBanner) {
+    syncMsg.textContent = failed > 0
+      ? `Synced ${synced}, ${failed} failed. Check failed sales below.`
+      : `${synced} offline sale${synced > 1 ? 's' : ''} synced successfully!`;
+    setTimeout(() => {
+      syncBanner.style.display = 'none';
+      updateOfflineBanner();
+    }, 3000);
+  }
+}
+
+async function renderFailedSales() {
+  const section = document.getElementById('failed-sales-section');
+  const listEl  = document.getElementById('failed-sales-list');
+  if (!section || !listEl) return;
+
+  const failed = await getFailedSales();
+  if (!failed.length) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  listEl.innerHTML = failed.map(entry => `
+    <div style="background:var(--surface2);border:1px solid #fecaca;border-radius:8px;
+                padding:12px 14px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-size:13px;font-weight:500;color:var(--text);">
+            Offline Sale — ${entry.items.length} item${entry.items.length > 1 ? 's' : ''}
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">
+            Queued: ${new Date(entry.created_at).toLocaleString()} &middot;
+            Attempts: ${entry.attempts}/${3}
+          </div>
+          <div style="font-size:12px;color:#dc2626;margin-top:4px;">
+            Error: ${entry.last_error || 'Unknown error'}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost retry-failed-btn" data-txn="${entry.txn_id}"
+            style="font-size:12px;color:#16a34a;border-color:#16a34a;">
+            Retry
+          </button>
+          <button class="btn btn-ghost discard-failed-btn" data-txn="${entry.txn_id}"
+            style="font-size:12px;color:#dc2626;border-color:#dc2626;">
+            Discard
+          </button>
+        </div>
+      </div>
+    </div>`).join('');
+
+  listEl.querySelectorAll('.retry-failed-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      // Reset to pending so sync engine picks it up
+      const db = await import('../js/offline.js');
+      const all = await db.getAllQueued();
+      const entry = all.find(e => e.txn_id === btn.dataset.txn);
+      if (!entry) return;
+      // Reset attempts and status so it retries
+      const { putRecord } = await openDBForRetry();
+      await syncOfflineSales();
+      renderFailedSales();
+      updateOfflineBanner();
+    });
+  });
+
+  listEl.querySelectorAll('.discard-failed-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Discard this offline sale? This cannot be undone.')) return;
+      await discardSale(btn.dataset.txn);
+      renderFailedSales();
+      updateOfflineBanner();
+    });
+  });
+}
+
+// ── Shift helpers (staff only) ────────────────────────────────────────────────
 
 async function loadMyShift() {
   try {
@@ -336,7 +504,8 @@ async function openShiftFromBanner() {
   }
 }
 
-// Load pending void requests (admin) 
+// ── Void requests (admin) ─────────────────────────────────────────────────────
+
 async function loadVoidRequests() {
   const section = document.getElementById('void-requests-section');
   const listEl  = document.getElementById('void-requests-list');
@@ -403,7 +572,8 @@ async function loadVoidRequests() {
   }
 }
 
-// Modal helpers 
+// ── Modal helpers ─────────────────────────────────────────────────────────────
+
 function resetSaleModal() {
   cart = [];
   document.getElementById('ns-product-search').value         = '';
@@ -415,7 +585,8 @@ function resetSaleModal() {
   renderCart();
 }
 
-// Search product 
+// ── Search product ────────────────────────────────────────────────────────────
+
 async function searchProduct() {
   const query = document.getElementById('ns-product-search').value.trim();
   const hint  = document.getElementById('ns-search-hint');
@@ -469,7 +640,8 @@ async function searchProduct() {
   }
 }
 
-// Add to cart 
+// ── Add to cart ───────────────────────────────────────────────────────────────
+
 async function addToCart(productId, productName, availableQty) {
   const errEl = document.getElementById('ns-error');
   errEl.classList.remove('show');
@@ -502,7 +674,8 @@ async function addToCart(productId, productName, availableQty) {
   }
 }
 
-// Render cart 
+// ── Render cart ───────────────────────────────────────────────────────────────
+
 function renderCart() {
   const cartSection = document.getElementById('cart-section');
   const emptyHint   = document.getElementById('cart-empty-hint');
@@ -574,7 +747,8 @@ function updateGrandTotal() {
   document.getElementById('cart-grand-total').textContent = `${fmt(total)}`;
 }
 
-// Submit sale 
+// ── Submit sale ───────────────────────────────────────────────────────────────
+
 async function submitSale() {
   const errEl  = document.getElementById('ns-error');
   const sucEl  = document.getElementById('ns-success');
@@ -588,7 +762,6 @@ async function submitSale() {
     errEl.classList.add('show');
     return;
   }
-
   if (!cart.length) {
     errEl.querySelector('span').textContent = 'Add at least one product to the cart.';
     errEl.classList.add('show');
@@ -600,25 +773,41 @@ async function submitSale() {
     errEl.classList.add('show');
     return;
   }
+
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Processing...';
+
+  const txn_id = generateTxnId();
+  const items  = cart.map(i => ({
+    stock_id:      i.stock_id,
+    quantity_sold: i.qty,
+    selling_price: i.selling_price,
+  }));
+
+  // ── Offline: queue the sale and show confirmation ──
+  if (!navigator.onLine) {
+    await queueSale(txn_id, items);
+    cart = [];
+    renderCart();
+    updateOfflineBanner();
+    sucMsg.innerHTML = 'You are offline. Sale has been saved and will sync automatically when you reconnect.';
+    sucEl.classList.add('show');
+    btn.disabled = false;
+    btn.innerHTML = 'Record Sale';
+    return;
+  }
+
+  // ── Online: submit normally with txn_id for deduplication ──
   try {
-    const receipt = await api.post('/sales/create', {
-      items: cart.map(i => ({
-        stock_id:      i.stock_id,
-        quantity_sold: i.qty,
-        selling_price: i.selling_price,
-      })),
-    });
+    const receipt = await api.post('/sales/create', { txn_id, items });
     sucMsg.innerHTML = `Sale recorded! Receipt #${receipt.receipt_id} - Total: ${fmt(receipt.grand_total)}
-    <span style="color:var(--accent-lt);cursor:pointer;text-decoration:underline;margin-left:8px;"
-      id="view-receipt-link">View Receipt</span>`;
+      <span style="color:var(--accent-lt);cursor:pointer;text-decoration:underline;margin-left:8px;"
+        id="view-receipt-link">View Receipt</span>`;
     sucEl.classList.add('show');
     cart = [];
     renderCart();
     if (!isAdmin()) loadMyShift();
 
-    // Auto-print receipt
     printReceipt(receipt);
 
     setTimeout(() => {
@@ -637,7 +826,8 @@ async function submitSale() {
   }
 }
 
-// Receipt lookup 
+// ── Receipt lookup ────────────────────────────────────────────────────────────
+
 async function fetchReceipt(id) {
   const container = document.getElementById('receipt-result');
   container.style.display = 'block';
@@ -646,12 +836,10 @@ async function fetchReceipt(id) {
   try {
     const r = await api.get(`/sales/${id}/salesreceipt`);
 
-    // Badge
     let badge = `<span class="badge badge-green">Completed</span>`;
     if (r.is_voided)         badge = `<span class="badge badge-red">Voided</span>`;
     else if (r.void_pending) badge = `<span class="badge" style="background:#fef3c7;color:#92400e;">Void Pending</span>`;
 
-    // Action buttons
     let actionHtml = '';
     if (!r.is_voided && !r.void_pending) {
       if (isAdmin()) {
@@ -689,7 +877,6 @@ async function fetchReceipt(id) {
         </div>
         ${receiptRow('Sold By', r.sold_by)}
         ${receiptRow('Date', fmtDateTime(r.created_at))}
-
         <div style="margin:14px 0 10px;font-size:12px;font-weight:500;color:var(--muted);">ITEMS</div>
         ${r.items.map(item => `
           <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;
@@ -702,7 +889,6 @@ async function fetchReceipt(id) {
               ${item.quantity_sold} x ${fmt(item.unit_price)}
             </div>
           </div>`).join('')}
-
         <div style="display:flex;justify-content:space-between;align-items:center;
                     padding:12px 0 0;border-top:1px solid var(--border);margin-top:8px;">
           <span style="font-size:13px;font-weight:500;color:var(--text);">Grand Total</span>
@@ -710,14 +896,11 @@ async function fetchReceipt(id) {
             ${fmt(r.grand_total)}
           </strong>
         </div>
-
         ${r.is_voided ? `
           <div style="margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;
                        border-radius:8px;color:#dc2626;font-size:13px;font-weight:500;">
             Voided${r.voided_by ? ` by ${r.voided_by}` : ''}${r.void_reason ? ` - "${r.void_reason}"` : ''}
           </div>` : ''}
-
-        <!-- Print / Download buttons -->
         <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
           <button id="print-receipt-btn" class="btn btn-ghost" style="font-size:12px;flex:1;">
             Print
@@ -726,15 +909,12 @@ async function fetchReceipt(id) {
             Download PDF
           </button>
         </div>
-
         ${actionHtml}
       </div>`;
 
-    // ── Print / Download (always bound, regardless of void state) ──
     document.getElementById('print-receipt-btn')?.addEventListener('click', () => printReceipt(r));
     document.getElementById('download-receipt-btn')?.addEventListener('click', () => downloadReceiptPDF(r));
 
-    // ── Admin instant void ──
     document.getElementById(`void-btn-${id}`)?.addEventListener('click', () => {
       pendingVoidSaleId = id;
       document.getElementById('void-reason').value = '';
@@ -742,7 +922,6 @@ async function fetchReceipt(id) {
       openModal('void-modal');
     });
 
-    // ── Staff void request ──
     document.getElementById(`void-request-btn-${id}`)?.addEventListener('click', () => {
       pendingVoidSaleId = id;
       document.getElementById('void-request-reason').value = '';
