@@ -61,6 +61,16 @@ export async function getPendingCount() {
   return sales.length;
 }
 
+// Get failed sales (extend later with status tracking if needed)
+export async function getFailedSales() {
+  return [];
+}
+
+// Discard a sale from the queue
+export async function discardSale(txn_id) {
+  await removePendingSale(txn_id);
+}
+
 // Sync all pending sales to backend
 export async function syncPendingSales(apiPost, onProgress) {
   const pending = await getPendingSales();
@@ -76,7 +86,7 @@ export async function syncPendingSales(apiPost, onProgress) {
       synced++;
       if (onProgress) onProgress(synced, pending.length);
     } catch (err) {
-      // If duplicate (already synced before) — remove it
+      // If already synced (duplicate txn_id) — remove it cleanly
       if (err.message?.includes('duplicate') || err.message?.includes('txn_id')) {
         await removePendingSale(sale.txn_id);
         synced++;
