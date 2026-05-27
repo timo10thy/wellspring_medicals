@@ -214,17 +214,38 @@ def search_total_product_stock(
     db: Session = Depends(get_db),
     current_user: User = Depends(AuthMiddleware),
 ):
+    # Subquery: best stock_id per product using DISTINCT ON (FEFO order)
+    best_stock = (
+        db.query(
+            Stocks.product_id.label("product_id"),
+            Stocks.id.label("stock_id"),
+        )
+        .distinct(Stocks.product_id)
+        .filter(Stocks.quantity > 0)
+        .order_by(
+            Stocks.product_id,
+            case((Stocks.expiry_date == None, 1), else_=0),
+            Stocks.expiry_date.asc(),
+        )
+        .subquery()
+    )
+
     query = (
         db.query(
             Products.id.label("product_id"),
             Products.name.label("product_name"),
-            func.sum(Stocks.quantity).label("total_quantity")
+            Products.price.label("price"),
+            func.sum(Stocks.quantity).label("total_quantity"),
+            best_stock.c.stock_id.label("stock_id"),
         )
         .join(Stocks, Stocks.product_id == Products.id)
-        .group_by(Products.id, Products.name)
+        .outerjoin(best_stock, best_stock.c.product_id == Products.id)
+        .group_by(Products.id, Products.name, Products.price, best_stock.c.stock_id)
     )
+
     if product_name:
         query = query.filter(Products.name.ilike(f"%{product_name}%"))
+
     return query.all()
 
 
