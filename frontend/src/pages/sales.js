@@ -1,5 +1,5 @@
 import { api } from '../js/api.js';
-import { generateTxnId, queueSale, getPendingCount, syncPendingSales, getFailedSales,
+import { generateTxnId, queueSale, syncPendingSales, getFailedSales,
          discardSale, cacheProducts, searchProductsOffline, getCachedProduct } from '../js/offline.js';
 import { renderSidebar, renderTopbar, bindSidebar,
          openModal, closeModal, bindModalClose,
@@ -32,19 +32,6 @@ export function renderSales() {
       <div class="page-body">
 
         ${!isAdmin() ? `<div id="shift-status-banner" style="margin-bottom:20px;"></div>` : ''}
-
-        <!-- Offline banner -->
-        <div id="offline-banner" style="display:none;margin-bottom:16px;">
-          <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;
-                      padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-            <div>
-              <div style="font-size:13px;font-weight:500;color:#92400e;">You are offline</div>
-              <div id="offline-queue-count" style="font-size:11px;color:#92400e;margin-top:2px;">
-                Sales will be saved and synced when you reconnect.
-              </div>
-            </div>
-          </div>
-        </div>
 
         <!-- Sync banner -->
         <div id="sync-banner" style="display:none;margin-bottom:16px;">
@@ -312,11 +299,9 @@ export async function initSales() {
 // ── Offline mode ──────────────────────────────────────────────────────────────
 
 function initOfflineMode() {
-  updateOfflineBanner();
   renderFailedSales();
 
   window.addEventListener('online', async () => {
-    updateOfflineBanner();
     // Refresh product cache now that we're back online
     try {
       const products = await api.get('/stock/total/search?product_name=');
@@ -325,30 +310,6 @@ function initOfflineMode() {
     await syncOfflineSales();
     renderFailedSales();
   });
-
-  window.addEventListener('offline', () => {
-    updateOfflineBanner();
-  });
-}
-
-async function updateOfflineBanner() {
-  const banner = document.getElementById('offline-banner');
-  const count  = document.getElementById('offline-queue-count');
-  if (!banner) return;
-
-  const pending = await getPendingCount();
-
-  if (!navigator.onLine) {
-    banner.style.display = 'block';
-    count.textContent = pending > 0
-      ? `${pending} sale${pending > 1 ? 's' : ''} queued — will sync when reconnected.`
-      : 'Sales will be saved and synced when you reconnect.';
-  } else {
-    banner.style.display = pending > 0 ? 'block' : 'none';
-    if (pending > 0) {
-      count.textContent = `${pending} offline sale${pending > 1 ? 's' : ''} pending sync...`;
-    }
-  }
 }
 
 async function syncOfflineSales() {
@@ -373,7 +334,6 @@ async function syncOfflineSales() {
       : `${synced} offline sale${synced > 1 ? 's' : ''} synced successfully!`;
     setTimeout(() => {
       syncBanner.style.display = 'none';
-      updateOfflineBanner();
     }, 3000);
   }
 }
@@ -416,7 +376,6 @@ async function renderFailedSales() {
       if (!confirm('Discard this offline sale? This cannot be undone.')) return;
       await discardSale(btn.dataset.txn);
       renderFailedSales();
-      updateOfflineBanner();
     });
   });
 }
@@ -826,7 +785,6 @@ async function submitSale() {
     await queueSale(txn_id, items);
     cart = [];
     renderCart();
-    updateOfflineBanner();
     sucMsg.innerHTML = 'You are offline. Sale has been saved and will sync automatically when you reconnect.';
     sucEl.classList.add('show');
     btn.disabled = false;
