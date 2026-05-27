@@ -1,52 +1,325 @@
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
-from typing import Annotated, Optional
+from fastapi import APIRouter, Depends, status, HTTPException, Query
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, case
+from typing import Annotated
+from app.schema.stock_schema import StockCreate, StockResponse, StockConsumptionReport, TotalProductStock, StockExpireAlert
 from app.routes.basemodel import get_db
-from app.models.stock_movement import StockMovement
-from app.models.products import Products
+from app.middlewares.admin import admin_validation
 from app.middlewares.auth import AuthMiddleware
 from app.models.users import User
+from app.models.products import Products
+from app.models.stock import Stocks
+from app.models.sales import Sales
+from app.routes.movement_helper import log_movement
+from datetime import datetime, date, timedelta
 import logging
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/stock", tags=["Stock Movements"])
-
-db_dependency = Annotated[Session, Depends(get_db)]
+router = APIRouter(prefix='/stock', tags=['Stock'])
 
 
-@router.get("/movements")
-def get_stock_movements(
-    db: db_dependency,
-    current_user: User = Depends(AuthMiddleware),
-    product_id: Optional[int] = Query(default=None),
-    movement_type: Optional[str] = Query(default=None),
-    limit: int = Query(default=50, le=200),
-    offset: int = Query(default=0),
+@router.post('/create', response_model=StockResponse, status_code=status.HTTP_201_CREATED)
+def stock_create(stock_data: StockCreate, db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
+    if stock_data.quantity <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Stock quantity must be greater than zero")
+    if stock_data.cost_price <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Stock cost price must be greater than zero")
+    try:
+        product = db.query(Products).filter(Products.id == stock_data.product_id).first()
+        if not product:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+
+        new_stock = Stocks(
+            product_id=stock_data.product_id,
+            quantity=stock_data.quantity,
+            cost_price=stock_data.cost_price,
+            expiry_date=stock_data.expiry_date
+        )
+        db.add(new_stock)
+        db.commit()
+        db.refresh(new_stock)
+
+        log_movement(
+            db, new_stock,
+            movement_type='stock_in',
+            quantity_before=0,
+            quantity_after=new_stock.quantity,
+            performed_by=current_admin.user_name,
+            note='New stock created',
+        )
+        db.commit()
+        return new_stock
+
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create stock")
+
+
+@router.get("/by-product/{product_id}", response_model=StockResponse, status_code=status.HTTP_200_OK)
+def get_stock_by_product(product_id: int, db: Session = Depends(get_db), current_user: User = Depends(AuthMiddleware)):
+    stock = db.query(Stocks).filter(
+        Stocks.product_id == product_id,
+        Stocks.quantity > 0
+    ).order_by(
+        case((Stocks.expiry_date == None, 1), else_=0),
+        Stocks.expiry_date.asc()
+    ).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="No available stock for this product")
+    return stock
+
+
+@router.get("/{stock_id}/consumption", response_model=StockConsumptionReport, status_code=status.HTTP_200_OK)
+def check_consumption(stock_id: int, db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
+    stock = db.query(Stocks).filter(Stocks.id == stock_id).first()
+    if not stock:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stock not found")
+    product = stock.product
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product for this stock not found")
+
+    sales = db.query(Sales).filter(Sales.stock_id == stock.id).all()
+    total_quantity_sold = sum(sale.quantity_sold for sale in sales)
+    initial_stock_quantity = stock.quantity + total_quantity_sold
+    if sales:
+        first_sale_date = min(sale.created_at.date() for sale in sales)
+        days_active = (date.today() - first_sale_date).days or 1
+        average_daily_consumption = total_quantity_sold / days_active
+    else:
+        average_daily_consumption = 0
+    estimated_days_remaining = int(stock.quantity / average_daily_consumption) if average_daily_consumption > 0 else 0
+
+    return {
+        "stock_id": stock.id,
+        "product_name": product.name,
+        "current_quantity": stock.quantity,
+        "initial_stock_quantity": initial_stock_quantity,
+        "total_quantity_sold": total_quantity_sold,
+        "average_daily_consumption": round(average_daily_consumption, 2),
+        "estimated_days_remaining": estimated_days_remaining
+    }
+
+
+@router.post('/add/stock', response_model=StockResponse, status_code=status.HTTP_201_CREATED)
+def new_stock(
+    stock_data: StockCreate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(admin_validation)
 ):
-    query = db.query(StockMovement).order_by(StockMovement.created_at.desc())
+    product = db.query(Products).filter(Products.name.ilike(stock_data.product_name)).first()
+    if not product:
+        raise HTTPException(status_code=404, detail=f"Product '{stock_data.product_name}' not found")
 
-    if product_id:
-        query = query.filter(StockMovement.product_id == product_id)
-    if movement_type:
-        query = query.filter(StockMovement.movement_type == movement_type)
+    existing_stock = db.query(Stocks).filter(
+        Stocks.product_id == product.id,
+        Stocks.cost_price == stock_data.cost_price,
+        Stocks.expiry_date == stock_data.expiry_date
+    ).first()
 
-    total = query.count()
-    movements = query.offset(offset).limit(limit).all()
+    if existing_stock:
+        qty_before = existing_stock.quantity
+        existing_stock.quantity += stock_data.quantity
+        db.add(existing_stock)
+        db.commit()
+        db.refresh(existing_stock)
+        log_movement(
+            db, existing_stock,
+            movement_type='stock_in',
+            quantity_before=qty_before,
+            quantity_after=existing_stock.quantity,
+            performed_by=current_admin.user_name,
+            note='Stock replenished',
+        )
+        db.commit()
+        return existing_stock
+    else:
+        new_stock_entry = Stocks(
+            product_id=product.id,
+            quantity=stock_data.quantity,
+            cost_price=stock_data.cost_price,
+            expiry_date=stock_data.expiry_date,
+        )
+        db.add(new_stock_entry)
+        db.commit()
+        db.refresh(new_stock_entry)
+        log_movement(
+            db, new_stock_entry,
+            movement_type='stock_in',
+            quantity_before=0,
+            quantity_after=new_stock_entry.quantity,
+            performed_by=current_admin.user_name,
+            note='New stock entry created',
+        )
+        db.commit()
+        return new_stock_entry
 
-    result = []
-    for m in movements:
-        result.append({
-            "id":               m.id,
-            "product_id":       m.product_id,
-            "product_name":     m.product.name if m.product else "—",
-            "stock_id":         m.stock_id,
-            "movement_type":    m.movement_type,
-            "quantity_before":  m.quantity_before,
-            "quantity_changed": m.quantity_changed,
-            "quantity_after":   m.quantity_after,
-            "performed_by":     m.performed_by,
-            "reference_id":     m.reference_id,
-            "note":             m.note,
-            "created_at":       str(m.created_at),
-        })
-    return {"total": total, "movements": result}
+
+def get_total_stock_quantity(product_id: int, db: Session):
+    all_stocks = db.query(Stocks).filter(Stocks.product_id == product_id).all()
+    return sum(stock.quantity for stock in all_stocks)
+
+
+@router.get("/stock/total", response_model=list[TotalProductStock], status_code=status.HTTP_200_OK)
+def total_product_per_stock(db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
+    total_stock = (
+        db.query(
+            Products.id.label("product_id"),
+            Products.name.label("product_name"),
+            func.sum(Stocks.quantity).label("total_quantity")
+        )
+        .join(Stocks, Stocks.product_id == Products.id)
+        .group_by(Products.id, Products.name)
+        .all()
+    )
+    return total_stock
+
+
+@router.get('/products/{product_id}/stock/total', response_model=TotalProductStock, status_code=status.HTTP_200_OK)
+def get_product_total_stock(product_id: int, db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
+    total_stock = (
+        db.query(
+            Products.id.label("product_id"),
+            Products.name.label("product_name"),
+            func.sum(Stocks.quantity).label("total_quantity")
+        )
+        .join(Stocks, Stocks.product_id == Products.id)
+        .filter(Products.id == product_id)
+        .group_by(Products.id, Products.name)
+        .first()
+    )
+    if not total_stock:
+        raise HTTPException(status_code=404, detail="Product not found or no stock available")
+    return total_stock
+
+
+@router.get("/stock/total/search", response_model=list[TotalProductStock], status_code=status.HTTP_200_OK)
+def total_product_per_stock_search(db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
+    total_stock = (
+        db.query(
+            Products.id.label("product_id"),
+            Products.name.label("product_name"),
+            func.sum(Stocks.quantity).label("total_quantity")
+        )
+        .join(Stocks, Stocks.product_id == Products.id)
+        .group_by(Products.id, Products.name)
+        .all()
+    )
+    return total_stock
+
+
+@router.get("/total/search", status_code=status.HTTP_200_OK)
+def search_total_product_stock(
+    product_name: str | None = Query(default=None, description="Search product by name (partial match)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(AuthMiddleware),
+):
+    # Correlated subquery: best stock_id per product (FEFO — earliest expiry first, nulls last)
+    best_stock_subq = (
+        db.query(Stocks.id)
+        .filter(
+            Stocks.product_id == Products.id,
+            Stocks.quantity > 0,
+        )
+        .order_by(
+            case((Stocks.expiry_date == None, 1), else_=0),
+            Stocks.expiry_date.asc(),
+        )
+        .limit(1)
+        .correlate(Products)
+        .scalar_subquery()
+    )
+
+    query = (
+        db.query(
+            Products.id.label("product_id"),
+            Products.name.label("product_name"),
+            Products.price.label("price"),
+            func.sum(Stocks.quantity).label("total_quantity"),
+            best_stock_subq.label("stock_id"),
+        )
+        .join(Stocks, Stocks.product_id == Products.id)
+        .group_by(Products.id, Products.name, Products.price)
+    )
+
+    if product_name:
+        query = query.filter(Products.name.ilike(f"%{product_name}%"))
+
+    rows = query.all()
+
+    return [
+        {
+            "product_id":     r.product_id,
+            "product_name":   r.product_name,
+            "price":          float(r.price),
+            "total_quantity": r.total_quantity,
+            "stock_id":       r.stock_id,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/stocks/expiry-alerts", response_model=list[StockExpireAlert], status_code=status.HTTP_200_OK)
+def expiration_alert(db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
+    today = date.today()
+    expiry_window = today + timedelta(days=180)
+    stocks = (
+        db.query(Stocks)
+        .join(Stocks.product)
+        .options(joinedload(Stocks.product))
+        .filter(
+            Stocks.expiry_date != None,
+            Stocks.expiry_date <= expiry_window,
+            Stocks.quantity > 0
+        )
+        .all()
+    )
+
+    def get_expiry_action(days: int) -> str:
+        if 90 <= days <= 180:
+            return "Warning: product life span is getting low"
+        elif 45 <= days <= 89:
+            return "Warning: Product should be discounted"
+        elif 30 <= days <= 44:
+            return "Critical level: Product should be returned"
+        elif 1 <= days <= 29:
+            return "Very critical: Product will soon expire"
+        else:
+            return "Expired product - remove immediately"
+
+    alerts = []
+    for stock in stocks:
+        remaining_days = (stock.expiry_date - today).days
+        alerts.append(StockExpireAlert(
+            stock_id=stock.id,
+            product_id=stock.product_id,
+            product_name=stock.product.name,
+            expire_date=stock.expiry_date,
+            days_to_expire=remaining_days,
+            quantity_affected=str(stock.quantity),
+            stock_value_cost=float(stock.quantity * stock.cost_price),
+            recommended_action=get_expiry_action(remaining_days)
+        ))
+    return alerts
+
+
+@router.get("/search/available", status_code=status.HTTP_200_OK)
+def search_available_products(
+    product_name: str | None = Query(default=None, description="Search product by name"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(AuthMiddleware),
+):
+    query = (
+        db.query(
+            Products.id.label("product_id"),
+            Products.name.label("product_name"),
+            func.sum(Stocks.quantity).label("total_quantity")
+        )
+        .join(Stocks, Stocks.product_id == Products.id)
+        .filter(Products.is_active == True)
+        .group_by(Products.id, Products.name)
+        .having(func.sum(Stocks.quantity) > 0)
+    )
+    if product_name:
+        query = query.filter(Products.name.ilike(f"%{product_name}%"))
+    return query.all()

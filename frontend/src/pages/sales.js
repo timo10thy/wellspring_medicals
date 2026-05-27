@@ -209,9 +209,10 @@ export async function initSales() {
   initOfflineMode();
 
   // Cache products while online for offline search
+  // NOTE: /stock/total/search now returns price and stock_id alongside product_id, product_name, total_quantity
   if (navigator.onLine) {
     try {
-      const products = await api.get('/stock/stock/total/search?product_name=');
+      const products = await api.get('/stock/total/search?product_name=');
       if (products?.length) cacheProducts(products);
     } catch {
       // Silently fail — cache may already exist
@@ -318,7 +319,7 @@ function initOfflineMode() {
     updateOfflineBanner();
     // Refresh product cache now that we're back online
     try {
-      const products = await api.get('/stock/stock/total/search?product_name=');
+      const products = await api.get('/stock/total/search?product_name=');
       if (products?.length) cacheProducts(products);
     } catch {}
     await syncOfflineSales();
@@ -612,7 +613,11 @@ async function searchProduct() {
     resEl.style.display = 'block';
     listEl.innerHTML = results.map(p => `
       <div class="product-result-item"
-        data-id="${p.product_id}" data-name="${p.product_name}" data-qty="${p.total_quantity}"
+        data-id="${p.product_id}"
+        data-name="${p.product_name}"
+        data-qty="${p.total_quantity}"
+        data-price="${p.price ?? ''}"
+        data-stock-id="${p.stock_id ?? ''}"
         style="display:flex;align-items:center;justify-content:space-between;
                padding:10px 12px;background:var(--surface2);border:1px solid var(--border2);
                border-radius:8px;cursor:${p.total_quantity > 0 ? 'pointer' : 'not-allowed'};
@@ -634,7 +639,13 @@ async function searchProduct() {
       item.addEventListener('click', () => {
         const qty = parseInt(item.getAttribute('data-qty'));
         if (qty <= 0) return;
-        addToCart(parseInt(item.getAttribute('data-id')), item.getAttribute('data-name'), qty);
+        addToCart(
+          parseInt(item.getAttribute('data-id')),
+          item.getAttribute('data-name'),
+          qty,
+          item.getAttribute('data-price') || null,
+          item.getAttribute('data-stock-id') || null,
+        );
       });
     });
   } catch (err) {
@@ -647,7 +658,7 @@ async function searchProduct() {
 
 // ── Add to cart ───────────────────────────────────────────────────────────────
 
-async function addToCart(productId, productName, availableQty) {
+async function addToCart(productId, productName, availableQty, cachedPrice, cachedStockId) {
   const errEl = document.getElementById('ns-error');
   errEl.classList.remove('show');
   const existing = cart.find(i => i.product_id === productId);
@@ -665,13 +676,21 @@ async function addToCart(productId, productName, availableQty) {
       // Use cached product data when offline
       const cached = getCachedProduct(productId);
       if (!cached) throw new Error('Product not found in offline cache.');
-      selling_price = parseFloat(cached.price || cached.selling_price);
+      selling_price = parseFloat(cached.price);
       stock_id      = cached.stock_id;
+      if (!selling_price || !stock_id) throw new Error('Offline cache is missing price or stock data. Please reconnect to refresh.');
     } else {
-      const details   = await api.get(`/product/${productId}/details`);
-      const stockData = await api.get(`/stock/by-product/${productId}`);
-      selling_price   = parseFloat(details.price);
-      stock_id        = stockData.id;
+      // Use data passed through from search results if available (price + stock_id now
+      // returned by /stock/total/search), otherwise fall back to individual API calls.
+      if (cachedPrice && cachedStockId) {
+        selling_price = parseFloat(cachedPrice);
+        stock_id      = parseInt(cachedStockId);
+      } else {
+        const details   = await api.get(`/product/${productId}/details`);
+        const stockData = await api.get(`/stock/by-product/${productId}`);
+        selling_price   = parseFloat(details.price);
+        stock_id        = stockData.id;
+      }
     }
 
     cart.push({
