@@ -1,4 +1,4 @@
-// ── Profile Page ──────────────────────────────────────────────────────────────
+//Profile Page 
 
 import { auth }                                    from '../js/auth.js';
 import { navigate }                                from '../js/router.js';
