@@ -1,4 +1,4 @@
-// ── Auth Store ───────────────────────────────────────────────────────────────
+// Auth Store 
 // Manages JWT token and current user session in localStorage
 
 const TOKEN_KEY = 'pharma_token';

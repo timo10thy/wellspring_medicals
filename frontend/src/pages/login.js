@@ -1,4 +1,4 @@
-// ── Login Page ────────────────────────────────────────────────────────────────
+//Login Page 
 // POST /auth/login → { access_token, token_type, email, user_id }
 // After login, GET /auth/me to get role, then store full user object
 
@@ -68,7 +68,21 @@ export function renderLogin() {
   </div>`;
 }
 
-//Login logic (called after render) 
+// Debug helper 
+function showDebug(msg) {
+  let box = document.getElementById('debug-box');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'debug-box';
+    box.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-size:11px;padding:8px;z-index:9999;max-height:40vh;overflow-y:auto;font-family:monospace;';
+    document.body.appendChild(box);
+  }
+  const line = document.createElement('div');
+  line.textContent = new Date().toISOString().slice(11, 19) + ' ' + msg;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+// Login logic (called after render)
 export function initLogin() {
   const form    = document.getElementById('login-form');
   const btn     = document.getElementById('login-btn');
@@ -104,14 +118,19 @@ export function initLogin() {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Signing in…';
 
+    showDebug('--- Login attempt: ' + email + ' ---');
+
     try {
       // Step 1: Login → get token
+      showDebug('Step 1: POST /auth/login...');
       const data = await api.post('/auth/login', { email, password }, false);
+      showDebug('Step 1 OK: token=' + (data.access_token ? 'YES' : 'MISSING') + ' user_id=' + data.user_id);
 
       // Step 2: Fetch /auth/me to get name, role etc.
-      // Temporarily store token so api.get can use it
       auth.set(data.access_token, { id: data.user_id, email: data.email, role: '' });
+      showDebug('Step 2: GET /auth/me...');
       const me = await api.get('/auth/me');
+      showDebug('Step 2 OK: name=' + me.name + ' role=' + me.role);
 
       // Step 3: Store full user
       auth.set(data.access_token, {
@@ -120,9 +139,11 @@ export function initLogin() {
         name:  me.name,
         role:  me.role,
       });
-
+      showDebug('Step 3: auth stored, navigating...');
       navigate('dashboard');
+
     } catch (err) {
+      showDebug('ERROR: ' + err.message + ' (status=' + (err.status || 'none') + ')');
       errMsg.textContent = err.message.includes('pending')
         ? 'Your account is pending admin approval. Contact your administrator.'
         : 'Invalid email or password.';
