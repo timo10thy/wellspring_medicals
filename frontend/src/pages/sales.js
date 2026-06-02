@@ -6,7 +6,6 @@ import { renderSidebar, renderTopbar, bindSidebar,
          fmt, fmtDateTime, icons } from '../js/ui.js';
 import { printReceipt, downloadReceiptPDF } from './receipt.js';
 
-// Auth helpers
 function isAdmin() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   return user.role === 'ADMIN';
@@ -16,13 +15,11 @@ function currentUsername() {
   return user.username || '';
 }
 
-// Module state
 let cart              = [];
 let pendingVoidSaleId = null;
 let pendingVoidReqId  = null;
 let activeShift       = null;
 
-// Render
 export function renderSales() {
   return `
   <div class="page-enter app-layout">
@@ -33,7 +30,6 @@ export function renderSales() {
 
         ${!isAdmin() ? `<div id="shift-status-banner" style="margin-bottom:20px;"></div>` : ''}
 
-        <!-- Sync banner -->
         <div id="sync-banner" style="display:none;margin-bottom:16px;">
           <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;">
             <div id="sync-banner-msg" style="font-size:13px;font-weight:500;color:#166534;">
@@ -42,7 +38,6 @@ export function renderSales() {
           </div>
         </div>
 
-        <!-- Failed sales panel -->
         <div id="failed-sales-section" style="display:none;margin-bottom:24px;">
           <div class="card" style="padding:20px;">
             <div style="font-size:13px;font-weight:500;color:#dc2626;margin-bottom:14px;">
@@ -105,12 +100,26 @@ export function renderSales() {
       <div id="cart-section" style="display:none;">
         <div style="font-size:12px;font-weight:500;color:var(--muted);margin-bottom:8px;">CART</div>
         <div id="cart-items" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
+
+        <!-- Totals box -->
         <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:14px;margin-bottom:16px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-size:12px;color:var(--muted);">Grand Total</span>
-            <span id="cart-grand-total" style="font-family:var(--font-head);font-size:26px;color:var(--accent-lt);">0.00</span>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <span style="font-size:12px;color:var(--muted);">Subtotal</span>
+            <span id="cart-subtotal" style="font-size:14px;color:var(--text);">₦0.00</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:12px;">
+            <span style="font-size:12px;color:var(--muted);white-space:nowrap;">Discount (₦)</span>
+            <input type="number" id="discount-input" min="0" placeholder="0"
+              style="width:120px;padding:4px 8px;font-size:13px;text-align:right;
+                     border:1px solid var(--border2);border-radius:6px;
+                     background:var(--surface);color:var(--text);"/>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:10px;">
+            <span style="font-size:12px;color:var(--muted);">Amount to Pay</span>
+            <span id="cart-grand-total" style="font-family:var(--font-head);font-size:26px;color:var(--accent-lt);">₦0.00</span>
           </div>
         </div>
+
         <div style="display:flex;gap:10px;justify-content:flex-end;">
           <button type="button" data-close-modal class="btn btn-ghost">Cancel</button>
           <button id="ns-submit" class="btn btn-primary">Record Sale</button>
@@ -185,7 +194,6 @@ export function renderSales() {
   </div>`;
 }
 
-// Init
 export async function initSales() {
   bindSidebar();
   bindModalClose('new-sale-modal');
@@ -195,15 +203,11 @@ export async function initSales() {
 
   initOfflineMode();
 
-  // Cache products while online for offline search
-  // NOTE: /stock/total/search now returns price and stock_id alongside product_id, product_name, total_quantity
   if (navigator.onLine) {
     try {
       const products = await api.get('/stock/total/search?product_name=');
       if (products?.length) cacheProducts(products);
-    } catch {
-      // Silently fail — cache may already exist
-    }
+    } catch {}
   }
 
   if (!isAdmin()) {
@@ -302,7 +306,6 @@ function initOfflineMode() {
   renderFailedSales();
 
   window.addEventListener('online', async () => {
-    // Refresh product cache now that we're back online
     try {
       const products = await api.get('/stock/total/search?product_name=');
       if (products?.length) cacheProducts(products);
@@ -332,10 +335,14 @@ async function syncOfflineSales() {
     syncMsg.textContent = failed > 0
       ? `Synced ${synced}, ${failed} failed. Check failed sales below.`
       : `${synced} offline sale${synced > 1 ? 's' : ''} synced successfully!`;
-    setTimeout(() => {
-      syncBanner.style.display = 'none';
-    }, 3000);
+    setTimeout(() => { syncBanner.style.display = 'none'; }, 3000);
   }
+}
+
+async function getPendingCount() {
+  const { getPendingSales } = await import('../js/offline.js');
+  const sales = await getPendingSales();
+  return sales.length;
 }
 
 async function renderFailedSales() {
@@ -344,10 +351,7 @@ async function renderFailedSales() {
   if (!section || !listEl) return;
 
   const failed = await getFailedSales();
-  if (!failed.length) {
-    section.style.display = 'none';
-    return;
-  }
+  if (!failed.length) { section.style.display = 'none'; return; }
 
   section.style.display = 'block';
   listEl.innerHTML = failed.map(entry => `
@@ -362,12 +366,8 @@ async function renderFailedSales() {
             Queued: ${new Date(entry.queued_at).toLocaleString()}
           </div>
         </div>
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-ghost discard-failed-btn" data-txn="${entry.txn_id}"
-            style="font-size:12px;color:#dc2626;border-color:#dc2626;">
-            Discard
-          </button>
-        </div>
+        <button class="btn btn-ghost discard-failed-btn" data-txn="${entry.txn_id}"
+          style="font-size:12px;color:#dc2626;border-color:#dc2626;">Discard</button>
       </div>
     </div>`).join('');
 
@@ -380,7 +380,7 @@ async function renderFailedSales() {
   });
 }
 
-// ── Shift helpers (staff only) ────────────────────────────────────────────────
+// ── Shift helpers ─────────────────────────────────────────────────────────────
 
 async function loadMyShift() {
   try {
@@ -395,15 +395,12 @@ async function loadMyShift() {
 function renderShiftBanner() {
   const banner = document.getElementById('shift-status-banner');
   if (!banner) return;
-
   if (activeShift) {
     banner.innerHTML = `
       <div class="card" style="padding:14px 18px;border-left:3px solid var(--accent);display:flex;
            align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
         <div>
-          <div style="font-size:13px;font-weight:500;color:var(--text);">
-            Shift #${activeShift.id} - Active
-          </div>
+          <div style="font-size:13px;font-weight:500;color:var(--text);">Shift #${activeShift.id} - Active</div>
           <div style="font-size:11px;color:var(--muted);margin-top:2px;">
             Opened: ${fmtDateTime(activeShift.opened_at)} &nbsp;&middot;&nbsp;
             Sales so far: <strong style="color:var(--accent-lt);">${fmt(activeShift.sales_so_far)}</strong>
@@ -462,10 +459,7 @@ async function loadVoidRequests() {
   const listEl  = document.getElementById('void-requests-list');
   try {
     const data = await api.get('/sales/void-requests');
-    if (!data.length) {
-      section.style.display = 'none';
-      return;
-    }
+    if (!data.length) { section.style.display = 'none'; return; }
     section.style.display = 'block';
     listEl.innerHTML = data.map(vr => `
       <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;
@@ -478,18 +472,13 @@ async function loadVoidRequests() {
             <div style="font-size:11px;color:var(--muted);margin-top:2px;">
               Requested by <strong>${vr.requested_by}</strong> &middot; ${vr.created_at?.slice(0,10)}
             </div>
-            ${vr.reason ? `<div style="font-size:12px;color:var(--text);margin-top:4px;">
-              Reason: "${vr.reason}"</div>` : ''}
+            ${vr.reason ? `<div style="font-size:12px;color:var(--text);margin-top:4px;">Reason: "${vr.reason}"</div>` : ''}
           </div>
           <div style="display:flex;gap:8px;">
             <button class="btn btn-ghost approve-void-btn" data-req-id="${vr.void_request_id}" data-sale-id="${vr.sale_id}"
-              style="font-size:12px;color:#16a34a;border-color:#16a34a;">
-              Approve
-            </button>
+              style="font-size:12px;color:#16a34a;border-color:#16a34a;">Approve</button>
             <button class="btn btn-ghost reject-void-btn" data-req-id="${vr.void_request_id}"
-              style="font-size:12px;color:#dc2626;border-color:#dc2626;">
-              Reject
-            </button>
+              style="font-size:12px;color:#dc2626;border-color:#dc2626;">Reject</button>
           </div>
         </div>
       </div>`).join('');
@@ -517,7 +506,6 @@ async function loadVoidRequests() {
         openModal('reject-modal');
       });
     });
-
   } catch {
     section.style.display = 'none';
   }
@@ -533,6 +521,8 @@ function resetSaleModal() {
   document.getElementById('ns-results-list').innerHTML       = '';
   document.getElementById('ns-error').classList.remove('show');
   document.getElementById('ns-success').classList.remove('show');
+  const discountInput = document.getElementById('discount-input');
+  if (discountInput) discountInput.value = '';
   renderCart();
 }
 
@@ -549,9 +539,7 @@ async function searchProduct() {
 
   try {
     let results;
-
     if (!navigator.onLine) {
-      // Use cached products when offline
       results = searchProductsOffline(query);
       if (!results.length) {
         hint.textContent = 'No products found in offline cache.';
@@ -630,17 +618,13 @@ async function addToCart(productId, productName, availableQty, cachedPrice, cach
   }
   try {
     let selling_price, stock_id;
-
     if (!navigator.onLine) {
-      // Use cached product data when offline
       const cached = getCachedProduct(productId);
       if (!cached) throw new Error('Product not found in offline cache.');
       selling_price = parseFloat(cached.price);
       stock_id      = cached.stock_id;
       if (!selling_price || !stock_id) throw new Error('Offline cache is missing price or stock data. Please reconnect to refresh.');
     } else {
-      // Use data passed through from search results if available (price + stock_id now
-      // returned by /stock/total/search), otherwise fall back to individual API calls.
       if (cachedPrice && cachedStockId) {
         selling_price = parseFloat(cachedPrice);
         stock_id      = parseInt(cachedStockId);
@@ -651,15 +635,7 @@ async function addToCart(productId, productName, availableQty, cachedPrice, cach
         stock_id        = stockData.id;
       }
     }
-
-    cart.push({
-      product_id:    productId,
-      product_name:  productName,
-      stock_id,
-      selling_price,
-      available_qty: availableQty,
-      qty:           1,
-    });
+    cart.push({ product_id: productId, product_name: productName, stock_id, selling_price, available_qty: availableQty, qty: 1 });
     renderCart();
     document.getElementById('ns-search-results').style.display = 'none';
     document.getElementById('ns-product-search').value = '';
@@ -713,7 +689,7 @@ function renderCart() {
       const raw = parseInt(input.value);
       if (!isNaN(raw) && raw >= 1 && raw <= cart[idx].available_qty) {
         cart[idx].qty = raw;
-        updateGrandTotal();
+        updateTotals();
       }
     });
     input.addEventListener('blur', () => {
@@ -723,7 +699,7 @@ function renderCart() {
       if (val > cart[idx].available_qty) val = cart[idx].available_qty;
       cart[idx].qty = val;
       input.value   = val;
-      updateGrandTotal();
+      updateTotals();
     });
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
   });
@@ -735,12 +711,29 @@ function renderCart() {
     });
   });
 
-  updateGrandTotal();
+  // Bind discount input
+  const discountInput = document.getElementById('discount-input');
+  if (discountInput) {
+    discountInput.removeEventListener('input', updateTotals);
+    discountInput.addEventListener('input', updateTotals);
+  }
+
+  updateTotals();
 }
 
-function updateGrandTotal() {
-  const total = cart.reduce((sum, i) => sum + i.qty * i.selling_price, 0);
-  document.getElementById('cart-grand-total').textContent = `${fmt(total)}`;
+function getDiscount() {
+  const val = parseFloat(document.getElementById('discount-input')?.value || '0');
+  return isNaN(val) || val < 0 ? 0 : val;
+}
+
+function updateTotals() {
+  const subtotal = cart.reduce((sum, i) => sum + i.qty * i.selling_price, 0);
+  const discount = getDiscount();
+  const amountToPay = Math.max(0, subtotal - discount);
+  const subtotalEl = document.getElementById('cart-subtotal');
+  const totalEl    = document.getElementById('cart-grand-total');
+  if (subtotalEl) subtotalEl.textContent = `₦${fmt(subtotal)}`;
+  if (totalEl)    totalEl.textContent    = `₦${fmt(amountToPay)}`;
 }
 
 // ── Submit sale ───────────────────────────────────────────────────────────────
@@ -770,6 +763,14 @@ async function submitSale() {
     return;
   }
 
+  const subtotal = cart.reduce((sum, i) => sum + i.qty * i.selling_price, 0);
+  const discount = getDiscount();
+  if (discount > subtotal) {
+    errEl.querySelector('span').textContent = 'Discount cannot exceed the grand total.';
+    errEl.classList.add('show');
+    return;
+  }
+
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Processing...';
 
@@ -792,10 +793,10 @@ async function submitSale() {
     return;
   }
 
-  // Online: submit with txn_id for deduplication
+  // Online: submit with txn_id and discount
   try {
-    const receipt = await api.post('/sales/create', { txn_id, items });
-    sucMsg.innerHTML = `Sale recorded! Receipt #${receipt.receipt_id} - Total: ${fmt(receipt.grand_total)}
+    const receipt = await api.post('/sales/create', { txn_id, items, discount });
+    sucMsg.innerHTML = `Sale recorded! Receipt #${receipt.receipt_id} - Paid: ₦${fmt(receipt.amount_paid)}
       <span style="color:var(--accent-lt);cursor:pointer;text-decoration:underline;margin-left:8px;"
         id="view-receipt-link">View Receipt</span>`;
     sucEl.classList.add('show');
@@ -839,17 +840,13 @@ async function fetchReceipt(id) {
         actionHtml = `
           <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
             <button id="void-btn-${id}" class="btn btn-ghost"
-              style="color:#f87171;border-color:#f87171;font-size:12px;padding:6px 14px;">
-              Void Sale
-            </button>
+              style="color:#f87171;border-color:#f87171;font-size:12px;padding:6px 14px;">Void Sale</button>
           </div>`;
       } else {
         actionHtml = `
           <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end;">
             <button id="void-request-btn-${id}" class="btn btn-ghost"
-              style="font-size:12px;padding:6px 14px;">
-              Request Void
-            </button>
+              style="font-size:12px;padding:6px 14px;">Request Void</button>
           </div>`;
       }
     }
@@ -861,6 +858,18 @@ async function fetchReceipt(id) {
           A void request is pending admin approval.
         </div>`;
     }
+
+    const discountRow = r.discount > 0 ? `
+      <div style="display:flex;justify-content:space-between;align-items:center;
+          padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <span style="color:#16a34a;">Discount</span>
+        <span style="color:#16a34a;">-₦${fmt(r.discount)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;
+          padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <span style="color:var(--muted);">Amount Paid</span>
+        <span style="font-weight:500;">₦${fmt(r.amount_paid)}</span>
+      </div>` : '';
 
     container.innerHTML = `
       <div class="card" style="padding:18px;">
@@ -876,31 +885,28 @@ async function fetchReceipt(id) {
                       padding:10px 14px;margin-bottom:8px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
               <span style="font-size:13px;font-weight:500;color:var(--text);">${item.product_name}</span>
-              <span style="font-size:13px;font-weight:500;color:var(--accent-lt);">${fmt(item.total_amount)}</span>
+              <span style="font-size:13px;font-weight:500;color:var(--accent-lt);">₦${fmt(item.total_amount)}</span>
             </div>
             <div style="font-size:11px;color:var(--muted);">
-              ${item.quantity_sold} x ${fmt(item.unit_price)}
+              ${item.quantity_sold} x ₦${fmt(item.unit_price)}
             </div>
           </div>`).join('')}
         <div style="display:flex;justify-content:space-between;align-items:center;
                     padding:12px 0 0;border-top:1px solid var(--border);margin-top:8px;">
           <span style="font-size:13px;font-weight:500;color:var(--text);">Grand Total</span>
           <strong style="font-family:var(--font-head);font-size:20px;color:var(--accent-lt);">
-            ${fmt(r.grand_total)}
+            ₦${fmt(r.grand_total)}
           </strong>
         </div>
+        ${discountRow}
         ${r.is_voided ? `
           <div style="margin-top:12px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;
                        border-radius:8px;color:#dc2626;font-size:13px;font-weight:500;">
             Voided${r.voided_by ? ` by ${r.voided_by}` : ''}${r.void_reason ? ` - "${r.void_reason}"` : ''}
           </div>` : ''}
         <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
-          <button id="print-receipt-btn" class="btn btn-ghost" style="font-size:12px;flex:1;">
-            Print
-          </button>
-          <button id="download-receipt-btn" class="btn btn-ghost" style="font-size:12px;flex:1;">
-            Download PDF
-          </button>
+          <button id="print-receipt-btn" class="btn btn-ghost" style="font-size:12px;flex:1;">Print</button>
+          <button id="download-receipt-btn" class="btn btn-ghost" style="font-size:12px;flex:1;">Download PDF</button>
         </div>
         ${actionHtml}
       </div>`;
