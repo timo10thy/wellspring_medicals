@@ -16,7 +16,8 @@ async function request(method, path, body = null, requiresAuth = true) {
   if (res.status === 401) {
     auth.logout();
     navigate('login');
-    return;
+    throw new Error('Session expired. Please log in again.');
+    
   }
   let data;
   try { data = await res.json(); } catch { data = {}; }
