@@ -10,10 +10,6 @@ function isAdmin() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   return user.role === 'ADMIN';
 }
-function currentUsername() {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  return user.username || '';
-}
 
 let cart              = [];
 let pendingVoidSaleId = null;
@@ -300,7 +296,7 @@ export async function initSales() {
   if (isAdmin()) loadVoidRequests();
 }
 
-// ── Offline mode ──────────────────────────────────────────────────────────────
+// Offline mode 
 
 function initOfflineMode() {
   renderFailedSales();
@@ -380,7 +376,7 @@ async function renderFailedSales() {
   });
 }
 
-// ── Shift helpers ─────────────────────────────────────────────────────────────
+// Shift helpers
 
 async function loadMyShift() {
   try {
@@ -452,7 +448,7 @@ async function openShiftFromBanner() {
   }
 }
 
-// ── Void requests (admin) ─────────────────────────────────────────────────────
+//Void requests (admin)
 
 async function loadVoidRequests() {
   const section = document.getElementById('void-requests-section');
@@ -511,7 +507,7 @@ async function loadVoidRequests() {
   }
 }
 
-// ── Modal helpers ─────────────────────────────────────────────────────────────
+// Modal helpers
 
 function resetSaleModal() {
   cart = [];
@@ -526,7 +522,7 @@ function resetSaleModal() {
   renderCart();
 }
 
-// ── Search product ────────────────────────────────────────────────────────────
+//Search product
 
 async function searchProduct() {
   const query = document.getElementById('ns-product-search').value.trim();
@@ -558,29 +554,38 @@ async function searchProduct() {
     const listEl = document.getElementById('ns-results-list');
     const resEl  = document.getElementById('ns-search-results');
     resEl.style.display = 'block';
-    listEl.innerHTML = results.map(p => `
+
+    listEl.innerHTML = results.map(p => {
+      const isCut        = p.is_cuttable && p.pieces_per_unit > 0;
+      const availableUnits = isCut ? p.total_quantity * p.pieces_per_unit : p.total_quantity;
+      const unitLabel    = isCut ? p.sub_unit : 'unit';
+      return `
       <div class="product-result-item"
         data-id="${p.product_id}"
         data-name="${p.product_name}"
-        data-qty="${p.total_quantity}"
+        data-qty="${availableUnits}"
         data-price="${p.price ?? ''}"
         data-stock-id="${p.stock_id ?? ''}"
+        data-is-cuttable="${p.is_cuttable ?? false}"
+        data-sub-unit="${p.sub_unit ?? ''}"
+        data-pieces-per-unit="${p.pieces_per_unit ?? 1}"
         style="display:flex;align-items:center;justify-content:space-between;
                padding:10px 12px;background:var(--surface2);border:1px solid var(--border2);
-               border-radius:8px;cursor:${p.total_quantity > 0 ? 'pointer' : 'not-allowed'};
-               opacity:${p.total_quantity > 0 ? '1' : '0.5'};">
+               border-radius:8px;cursor:${availableUnits > 0 ? 'pointer' : 'not-allowed'};
+               opacity:${availableUnits > 0 ? '1' : '0.5'};">
         <div>
           <div style="font-size:13px;font-weight:500;color:var(--text)">${p.product_name}</div>
           <div style="font-size:11px;margin-top:2px;">
-            ${p.total_quantity > 0
-              ? `<span style="color:var(--accent-lt)">${p.total_quantity} units available</span>`
+            ${availableUnits > 0
+              ? `<span style="color:var(--accent-lt)">${availableUnits} ${unitLabel}s available</span>`
               : `<span style="color:#f87171">Out of stock</span>`}
           </div>
         </div>
-        ${p.total_quantity > 0
+        ${availableUnits > 0
           ? `<span class="badge badge-green">Add to Cart</span>`
           : `<span class="badge badge-red">Unavailable</span>`}
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
     listEl.querySelectorAll('.product-result-item').forEach(item => {
       item.addEventListener('click', () => {
@@ -592,6 +597,9 @@ async function searchProduct() {
           qty,
           item.getAttribute('data-price') || null,
           item.getAttribute('data-stock-id') || null,
+          item.getAttribute('data-is-cuttable') === 'true',
+          item.getAttribute('data-sub-unit') || '',
+          parseInt(item.getAttribute('data-pieces-per-unit')) || 1,
         );
       });
     });
@@ -603,9 +611,9 @@ async function searchProduct() {
   }
 }
 
-// ── Add to cart ───────────────────────────────────────────────────────────────
+// Add to cart
 
-async function addToCart(productId, productName, availableQty, cachedPrice, cachedStockId) {
+async function addToCart(productId, productName, availableQty, cachedPrice, cachedStockId, isCuttable, subUnit, piecesPerUnit) {
   const errEl = document.getElementById('ns-error');
   errEl.classList.remove('show');
   const existing = cart.find(i => i.product_id === productId);
@@ -621,21 +629,40 @@ async function addToCart(productId, productName, availableQty, cachedPrice, cach
     if (!navigator.onLine) {
       const cached = getCachedProduct(productId);
       if (!cached) throw new Error('Product not found in offline cache.');
-      selling_price = parseFloat(cached.price);
-      stock_id      = cached.stock_id;
+      const basePrice = parseFloat(cached.price);
+      const pieces    = cached.pieces_per_unit || 1;
+      const cut       = cached.is_cuttable || false;
+      selling_price   = cut ? basePrice / pieces : basePrice;
+      stock_id        = cached.stock_id;
       if (!selling_price || !stock_id) throw new Error('Offline cache is missing price or stock data. Please reconnect to refresh.');
     } else {
       if (cachedPrice && cachedStockId) {
-        selling_price = parseFloat(cachedPrice);
-        stock_id      = parseInt(cachedStockId);
+        const basePrice = parseFloat(cachedPrice);
+        selling_price   = isCuttable && piecesPerUnit > 1 ? basePrice / piecesPerUnit : basePrice;
+        stock_id        = parseInt(cachedStockId);
       } else {
         const details   = await api.get(`/product/${productId}/details`);
         const stockData = await api.get(`/stock/by-product/${productId}`);
-        selling_price   = parseFloat(details.price);
+        const basePrice = parseFloat(details.price);
+        const pieces    = details.pieces_per_unit || 1;
+        selling_price   = details.is_cuttable ? basePrice / pieces : basePrice;
         stock_id        = stockData.id;
+        isCuttable      = details.is_cuttable;
+        subUnit         = details.sub_unit || '';
+        piecesPerUnit   = pieces;
       }
     }
-    cart.push({ product_id: productId, product_name: productName, stock_id, selling_price, available_qty: availableQty, qty: 1 });
+    cart.push({
+      product_id:      productId,
+      product_name:    productName,
+      stock_id,
+      selling_price,
+      available_qty:   availableQty,
+      qty:             1,
+      is_cuttable:     isCuttable,
+      sub_unit:        subUnit,
+      pieces_per_unit: piecesPerUnit,
+    });
     renderCart();
     document.getElementById('ns-search-results').style.display = 'none';
     document.getElementById('ns-product-search').value = '';
@@ -646,7 +673,7 @@ async function addToCart(productId, productName, availableQty, cachedPrice, cach
   }
 }
 
-// ── Render cart ───────────────────────────────────────────────────────────────
+//Render cart
 
 function renderCart() {
   const cartSection = document.getElementById('cart-section');
@@ -669,13 +696,14 @@ function renderCart() {
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <div style="font-size:12px;color:var(--muted);">
           Unit price: <strong style="color:var(--text);">${fmt(item.selling_price)}</strong>
+          ${item.is_cuttable ? `<span style="color:var(--muted);"> / ${item.sub_unit}</span>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
           <label style="font-size:12px;color:var(--muted);">Qty:</label>
           <input type="number" class="field-input cart-qty-input" data-idx="${idx}"
             value="${item.qty}" min="1" max="${item.available_qty}"
             style="width:70px;padding:4px 8px;font-size:13px;text-align:center;"/>
-          <span style="font-size:11px;color:var(--muted);">/ ${item.available_qty}</span>
+          <span style="font-size:11px;color:var(--muted);">/ ${item.available_qty} ${item.is_cuttable ? item.sub_unit + 's' : 'units'}</span>
         </div>
         <div style="font-size:13px;font-weight:500;color:var(--accent-lt);margin-left:auto;">
           ${fmt(item.qty * item.selling_price)}
@@ -711,7 +739,6 @@ function renderCart() {
     });
   });
 
-  // Bind discount input
   const discountInput = document.getElementById('discount-input');
   if (discountInput) {
     discountInput.removeEventListener('input', updateTotals);
@@ -727,16 +754,16 @@ function getDiscount() {
 }
 
 function updateTotals() {
-  const subtotal = cart.reduce((sum, i) => sum + i.qty * i.selling_price, 0);
-  const discount = getDiscount();
+  const subtotal    = cart.reduce((sum, i) => sum + i.qty * i.selling_price, 0);
+  const discount    = getDiscount();
   const amountToPay = Math.max(0, subtotal - discount);
-  const subtotalEl = document.getElementById('cart-subtotal');
-  const totalEl    = document.getElementById('cart-grand-total');
+  const subtotalEl  = document.getElementById('cart-subtotal');
+  const totalEl     = document.getElementById('cart-grand-total');
   if (subtotalEl) subtotalEl.textContent = `₦${fmt(subtotal)}`;
   if (totalEl)    totalEl.textContent    = `₦${fmt(amountToPay)}`;
 }
 
-// ── Submit sale ───────────────────────────────────────────────────────────────
+//Submit sale
 
 async function submitSale() {
   const errEl  = document.getElementById('ns-error');
@@ -820,7 +847,7 @@ async function submitSale() {
   }
 }
 
-// ── Receipt lookup ────────────────────────────────────────────────────────────
+//Receipt lookup 
 
 async function fetchReceipt(id) {
   const container = document.getElementById('receipt-result');

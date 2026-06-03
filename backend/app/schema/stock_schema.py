@@ -36,8 +36,9 @@ class TotalProductStock(BaseModel):
     total_quantity: int
     price: Optional[float] = None
     stock_id: Optional[int] = None
-
-
+    is_cuttable: Optional[bool] = None
+    sub_unit: Optional[str] = None
+    pieces_per_unit: Optional[int] = None
 class StockExpireAlert(BaseModel):
     stock_id: int
     product_id: int
