@@ -10,6 +10,10 @@ function isAdmin() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   return user.role === 'ADMIN';
 }
+function currentUsername() {
+  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  return user.username || '';
+}
 
 let cart              = [];
 let pendingVoidSaleId = null;
@@ -296,7 +300,7 @@ export async function initSales() {
   if (isAdmin()) loadVoidRequests();
 }
 
-// Offline mode 
+// ── Offline mode ──────────────────────────────────────────────────────────────
 
 function initOfflineMode() {
   renderFailedSales();
@@ -376,7 +380,7 @@ async function renderFailedSales() {
   });
 }
 
-// Shift helpers
+// ── Shift helpers ─────────────────────────────────────────────────────────────
 
 async function loadMyShift() {
   try {
@@ -448,7 +452,7 @@ async function openShiftFromBanner() {
   }
 }
 
-//Void requests (admin)
+// ── Void requests (admin) ─────────────────────────────────────────────────────
 
 async function loadVoidRequests() {
   const section = document.getElementById('void-requests-section');
@@ -507,7 +511,7 @@ async function loadVoidRequests() {
   }
 }
 
-// Modal helpers
+// ── Modal helpers ─────────────────────────────────────────────────────────────
 
 function resetSaleModal() {
   cart = [];
@@ -522,7 +526,7 @@ function resetSaleModal() {
   renderCart();
 }
 
-//Search product
+// ── Search product ────────────────────────────────────────────────────────────
 
 async function searchProduct() {
   const query = document.getElementById('ns-product-search').value.trim();
@@ -557,13 +561,13 @@ async function searchProduct() {
 
     listEl.innerHTML = results.map(p => {
       const isCut        = p.is_cuttable && p.pieces_per_unit > 0;
-      const availableUnits = isCut ? p.total_quantity * p.pieces_per_unit : p.total_quantity;
+      const availableQty = isCut ? p.total_quantity * p.pieces_per_unit : p.total_quantity;
       const unitLabel    = isCut ? p.sub_unit : 'unit';
       return `
       <div class="product-result-item"
         data-id="${p.product_id}"
         data-name="${p.product_name}"
-        data-qty="${availableUnits}"
+        data-qty="${availableQty}"
         data-price="${p.price ?? ''}"
         data-stock-id="${p.stock_id ?? ''}"
         data-is-cuttable="${p.is_cuttable ?? false}"
@@ -571,17 +575,17 @@ async function searchProduct() {
         data-pieces-per-unit="${p.pieces_per_unit ?? 1}"
         style="display:flex;align-items:center;justify-content:space-between;
                padding:10px 12px;background:var(--surface2);border:1px solid var(--border2);
-               border-radius:8px;cursor:${availableUnits > 0 ? 'pointer' : 'not-allowed'};
-               opacity:${availableUnits > 0 ? '1' : '0.5'};">
+               border-radius:8px;cursor:${availableQty > 0 ? 'pointer' : 'not-allowed'};
+               opacity:${availableQty > 0 ? '1' : '0.5'};">
         <div>
           <div style="font-size:13px;font-weight:500;color:var(--text)">${p.product_name}</div>
           <div style="font-size:11px;margin-top:2px;">
-            ${availableUnits > 0
-              ? `<span style="color:var(--accent-lt)">${availableUnits} ${unitLabel}s available</span>`
+            ${availableQty > 0
+              ? `<span style="color:var(--accent-lt)">${availableQty} ${unitLabel}s available</span>`
               : `<span style="color:#f87171">Out of stock</span>`}
           </div>
         </div>
-        ${availableUnits > 0
+        ${availableQty > 0
           ? `<span class="badge badge-green">Add to Cart</span>`
           : `<span class="badge badge-red">Unavailable</span>`}
       </div>`;
@@ -603,6 +607,7 @@ async function searchProduct() {
         );
       });
     });
+
   } catch (err) {
     hint.textContent = err.message;
   } finally {
@@ -611,7 +616,7 @@ async function searchProduct() {
   }
 }
 
-// Add to cart
+// ── Add to cart ───────────────────────────────────────────────────────────────
 
 async function addToCart(productId, productName, availableQty, cachedPrice, cachedStockId, isCuttable, subUnit, piecesPerUnit) {
   const errEl = document.getElementById('ns-error');
@@ -673,7 +678,7 @@ async function addToCart(productId, productName, availableQty, cachedPrice, cach
   }
 }
 
-//Render cart
+// ── Render cart ───────────────────────────────────────────────────────────────
 
 function renderCart() {
   const cartSection = document.getElementById('cart-section');
@@ -763,7 +768,7 @@ function updateTotals() {
   if (totalEl)    totalEl.textContent    = `₦${fmt(amountToPay)}`;
 }
 
-//Submit sale
+// ── Submit sale ───────────────────────────────────────────────────────────────
 
 async function submitSale() {
   const errEl  = document.getElementById('ns-error');
@@ -847,7 +852,7 @@ async function submitSale() {
   }
 }
 
-//Receipt lookup 
+// ── Receipt lookup ────────────────────────────────────────────────────────────
 
 async function fetchReceipt(id) {
   const container = document.getElementById('receipt-result');
