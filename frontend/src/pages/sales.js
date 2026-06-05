@@ -10,10 +10,6 @@ function isAdmin() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   return user.role === 'ADMIN';
 }
-function currentUsername() {
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  return user.username || '';
-}
 
 let cart              = [];
 let pendingVoidSaleId = null;
@@ -101,7 +97,6 @@ export function renderSales() {
         <div style="font-size:12px;font-weight:500;color:var(--muted);margin-bottom:8px;">CART</div>
         <div id="cart-items" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;"></div>
 
-        <!-- Totals box -->
         <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:14px;margin-bottom:16px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
             <span style="font-size:12px;color:var(--muted);">Subtotal</span>
@@ -210,15 +205,10 @@ export async function initSales() {
     } catch {}
   }
 
-  if (!isAdmin()) {
-    await loadMyShift();
-  }
+  if (!isAdmin()) await loadMyShift();
 
   document.getElementById('new-sale-btn')?.addEventListener('click', () => {
-    if (!isAdmin() && !activeShift) {
-      promptOpenShift();
-      return;
-    }
+    if (!isAdmin() && !activeShift) { promptOpenShift(); return; }
     resetSaleModal();
     openModal('new-sale-modal');
   });
@@ -300,11 +290,10 @@ export async function initSales() {
   if (isAdmin()) loadVoidRequests();
 }
 
-//Offline mode
+// ── Offline mode ──────────────────────────────────────────────────────────────
 
 function initOfflineMode() {
   renderFailedSales();
-
   window.addEventListener('online', async () => {
     try {
       const products = await api.get('/stock/total/search?product_name=');
@@ -320,17 +309,12 @@ async function syncOfflineSales() {
   const syncMsg    = document.getElementById('sync-banner-msg');
   const pending    = await getPendingCount();
   if (!pending) return;
-
   if (syncBanner) syncBanner.style.display = 'block';
   if (syncMsg)    syncMsg.textContent = `Syncing ${pending} offline sale${pending > 1 ? 's' : ''}...`;
-
   const { synced, failed } = await syncPendingSales(
     (payload) => api.post('/sales/create', payload),
-    (done, total) => {
-      if (syncMsg) syncMsg.textContent = `Syncing... ${done}/${total}`;
-    }
+    (done, total) => { if (syncMsg) syncMsg.textContent = `Syncing... ${done}/${total}`; }
   );
-
   if (syncBanner) {
     syncMsg.textContent = failed > 0
       ? `Synced ${synced}, ${failed} failed. Check failed sales below.`
@@ -349,10 +333,8 @@ async function renderFailedSales() {
   const section = document.getElementById('failed-sales-section');
   const listEl  = document.getElementById('failed-sales-list');
   if (!section || !listEl) return;
-
   const failed = await getFailedSales();
   if (!failed.length) { section.style.display = 'none'; return; }
-
   section.style.display = 'block';
   listEl.innerHTML = failed.map(entry => `
     <div style="background:var(--surface2);border:1px solid #fecaca;border-radius:8px;
@@ -370,7 +352,6 @@ async function renderFailedSales() {
           style="font-size:12px;color:#dc2626;border-color:#dc2626;">Discard</button>
       </div>
     </div>`).join('');
-
   listEl.querySelectorAll('.discard-failed-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('Discard this offline sale? This cannot be undone.')) return;
@@ -380,15 +361,13 @@ async function renderFailedSales() {
   });
 }
 
-//Shift helpers
+// ── Shift helpers ─────────────────────────────────────────────────────────────
 
 async function loadMyShift() {
   try {
     const data  = await api.get('/shifts/my-shift');
     activeShift = data.shift || null;
-  } catch {
-    activeShift = null;
-  }
+  } catch { activeShift = null; }
   renderShiftBanner();
 }
 
@@ -414,13 +393,9 @@ function renderShiftBanner() {
            align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
         <div>
           <div style="font-size:13px;font-weight:500;color:var(--text);">No active shift</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px;">
-            You must open a shift before you can record sales.
-          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">You must open a shift before you can record sales.</div>
         </div>
-        <button id="banner-open-shift-btn" class="btn btn-primary" style="font-size:12px;padding:6px 16px;">
-          Open Shift
-        </button>
+        <button id="banner-open-shift-btn" class="btn btn-primary" style="font-size:12px;padding:6px 16px;">Open Shift</button>
       </div>`;
     document.getElementById('banner-open-shift-btn')?.addEventListener('click', openShiftFromBanner);
   }
@@ -431,7 +406,7 @@ function promptOpenShift() {
   if (!banner) return;
   banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
   banner.style.transition = 'opacity 0.15s';
-  banner.style.opacity    = '0.4';
+  banner.style.opacity = '0.4';
   setTimeout(() => { banner.style.opacity = '1'; }, 150);
   setTimeout(() => { banner.style.opacity = '0.4'; }, 350);
   setTimeout(() => { banner.style.opacity = '1'; }, 500);
@@ -452,7 +427,7 @@ async function openShiftFromBanner() {
   }
 }
 
-// Void requests (admin)
+// ── Void requests (admin) ─────────────────────────────────────────────────────
 
 async function loadVoidRequests() {
   const section = document.getElementById('void-requests-section');
@@ -466,9 +441,7 @@ async function loadVoidRequests() {
                   padding:12px 14px;margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
           <div>
-            <div style="font-size:13px;font-weight:500;color:var(--text);">
-              Sale #${vr.sale_id} - ${fmt(vr.total_amount)}
-            </div>
+            <div style="font-size:13px;font-weight:500;color:var(--text);">Sale #${vr.sale_id} - ${fmt(vr.total_amount)}</div>
             <div style="font-size:11px;color:var(--muted);margin-top:2px;">
               Requested by <strong>${vr.requested_by}</strong> &middot; ${vr.created_at?.slice(0,10)}
             </div>
@@ -482,23 +455,19 @@ async function loadVoidRequests() {
           </div>
         </div>
       </div>`).join('');
-
     listEl.querySelectorAll('.approve-void-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm(`Approve void for Sale #${btn.dataset.saleId}? Stock will be restored.`)) return;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner"></span>';
+        btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
         try {
           await api.patch(`/sales/void-requests/${btn.dataset.reqId}/approve`);
           loadVoidRequests();
         } catch (err) {
           alert(err.message);
-          btn.disabled = false;
-          btn.innerHTML = 'Approve';
+          btn.disabled = false; btn.innerHTML = 'Approve';
         }
       });
     });
-
     listEl.querySelectorAll('.reject-void-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         pendingVoidReqId = btn.dataset.reqId;
@@ -506,12 +475,10 @@ async function loadVoidRequests() {
         openModal('reject-modal');
       });
     });
-  } catch {
-    section.style.display = 'none';
-  }
+  } catch { section.style.display = 'none'; }
 }
 
-//Modal helpers
+// ── Modal helpers ─────────────────────────────────────────────────────────────
 
 function resetSaleModal() {
   cart = [];
@@ -526,7 +493,7 @@ function resetSaleModal() {
   renderCart();
 }
 
-//Search product
+// ── Search product ────────────────────────────────────────────────────────────
 
 async function searchProduct() {
   const query = document.getElementById('ns-product-search').value.trim();
@@ -560,51 +527,72 @@ async function searchProduct() {
     resEl.style.display = 'block';
 
     listEl.innerHTML = results.map(p => {
-      const isCut        = p.is_cuttable && p.pieces_per_unit > 0;
-      const availableQty = isCut ? p.total_quantity * p.pieces_per_unit : p.total_quantity;
-      const unitLabel    = isCut ? p.sub_unit : 'unit';
+      const isCut     = p.is_cuttable && p.pieces_per_unit > 0;
+      const cardQty   = p.total_quantity;
+      const tabletQty = isCut ? p.total_quantity * p.pieces_per_unit : 0;
       return `
       <div class="product-result-item"
         data-id="${p.product_id}"
         data-name="${p.product_name}"
-        data-qty="${availableQty}"
-        data-price="${p.price ?? ''}"
+        data-card-qty="${cardQty}"
+        data-tablet-qty="${tabletQty}"
+        data-card-price="${p.price ?? ''}"
+        data-cut-price="${p.cut_selling_price ?? ''}"
         data-stock-id="${p.stock_id ?? ''}"
         data-is-cuttable="${p.is_cuttable ?? false}"
         data-sub-unit="${p.sub_unit ?? ''}"
         data-pieces-per-unit="${p.pieces_per_unit ?? 1}"
-        style="display:flex;align-items:center;justify-content:space-between;
-               padding:10px 12px;background:var(--surface2);border:1px solid var(--border2);
-               border-radius:8px;cursor:${availableQty > 0 ? 'pointer' : 'not-allowed'};
-               opacity:${availableQty > 0 ? '1' : '0.5'};">
-        <div>
-          <div style="font-size:13px;font-weight:500;color:var(--text)">${p.product_name}</div>
-          <div style="font-size:11px;margin-top:2px;">
-            ${availableQty > 0
-              ? `<span style="color:var(--accent-lt)">${availableQty} ${unitLabel}s available</span>`
-              : `<span style="color:#f87171">Out of stock</span>`}
+        style="padding:10px 12px;background:var(--surface2);border:1px solid var(--border2);
+               border-radius:8px;cursor:${cardQty > 0 ? 'default' : 'not-allowed'};
+               opacity:${cardQty > 0 ? '1' : '0.5'};">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${isCut ? '10px' : '0'};">
+          <div>
+            <div style="font-size:13px;font-weight:500;color:var(--text)">${p.product_name}</div>
+            <div style="font-size:11px;margin-top:2px;color:var(--muted);">
+              ${cardQty > 0 ? `${cardQty} card${cardQty !== 1 ? 's' : ''} in stock` : '<span style="color:#f87171">Out of stock</span>'}
+              ${isCut ? ` &middot; ${tabletQty} ${p.sub_unit}s` : ''}
+            </div>
           </div>
+          ${!isCut && cardQty > 0 ? `<button class="btn btn-ghost add-whole-card" style="font-size:12px;padding:4px 12px;">Add ₦${fmt(p.price)}</button>` : ''}
         </div>
-        ${availableQty > 0
-          ? `<span class="badge badge-green">Add to Cart</span>`
-          : `<span class="badge badge-red">Unavailable</span>`}
+        ${isCut && cardQty > 0 ? `
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost add-whole-card" style="font-size:12px;flex:1;padding:6px;">
+              Whole card — ₦${fmt(p.price)}
+            </button>
+            <button class="btn btn-ghost add-cut" style="font-size:12px;flex:1;padding:6px;color:var(--accent-lt);border-color:var(--accent-lt);">
+              Per ${p.sub_unit} — ₦${p.cut_selling_price != null ? fmt(p.cut_selling_price) : '?'}
+            </button>
+          </div>` : ''}
       </div>`;
     }).join('');
 
     listEl.querySelectorAll('.product-result-item').forEach(item => {
-      item.addEventListener('click', () => {
-        const qty = parseInt(item.getAttribute('data-qty'));
-        if (qty <= 0) return;
-        addToCart(
-          parseInt(item.getAttribute('data-id')),
-          item.getAttribute('data-name'),
-          qty,
-          item.getAttribute('data-price') || null,
-          item.getAttribute('data-stock-id') || null,
-          item.getAttribute('data-is-cuttable') === 'true',
-          item.getAttribute('data-sub-unit') || '',
-          parseInt(item.getAttribute('data-pieces-per-unit')) || 1,
-        );
+      const cardQty   = parseInt(item.getAttribute('data-card-qty'));
+      const tabletQty = parseInt(item.getAttribute('data-tablet-qty'));
+      const cardPrice = parseFloat(item.getAttribute('data-card-price'));
+      const cutPrice  = parseFloat(item.getAttribute('data-cut-price'));
+      const stockId   = item.getAttribute('data-stock-id');
+      const isCut     = item.getAttribute('data-is-cuttable') === 'true';
+      const subUnit   = item.getAttribute('data-sub-unit');
+      const pieces    = parseInt(item.getAttribute('data-pieces-per-unit')) || 1;
+      const id        = parseInt(item.getAttribute('data-id'));
+      const name      = item.getAttribute('data-name');
+
+      item.querySelector('.add-whole-card')?.addEventListener('click', () => {
+        if (cardQty <= 0) return;
+        addToCart(id, name, cardQty, cardPrice, stockId, false, '', 1);
+      });
+
+      item.querySelector('.add-cut')?.addEventListener('click', () => {
+        if (tabletQty <= 0) return;
+        if (!cutPrice || isNaN(cutPrice)) {
+          document.getElementById('ns-error').querySelector('span').textContent =
+            `No cut price set for ${name}. Please update the product first.`;
+          document.getElementById('ns-error').classList.add('show');
+          return;
+        }
+        addToCart(id, name, tabletQty, cutPrice, stockId, true, subUnit, pieces);
       });
     });
 
@@ -616,12 +604,14 @@ async function searchProduct() {
   }
 }
 
-//Add to cart 
+// ── Add to cart ───────────────────────────────────────────────────────────────
 
-async function addToCart(productId, productName, availableQty, cachedPrice, cachedStockId, isCuttable, subUnit, piecesPerUnit) {
+async function addToCart(productId, productName, availableQty, sellingPrice, cachedStockId, isCut, subUnit, piecesPerUnit) {
   const errEl = document.getElementById('ns-error');
   errEl.classList.remove('show');
-  const existing = cart.find(i => i.product_id === productId);
+
+  // If already in cart with same mode, just increment
+  const existing = cart.find(i => i.product_id === productId && i.is_cut === isCut);
   if (existing) {
     if (existing.qty < existing.available_qty) existing.qty += 1;
     renderCart();
@@ -629,43 +619,23 @@ async function addToCart(productId, productName, availableQty, cachedPrice, cach
     document.getElementById('ns-product-search').value = '';
     return;
   }
+
   try {
-    let selling_price, stock_id;
-    if (!navigator.onLine) {
-      const cached = getCachedProduct(productId);
-      if (!cached) throw new Error('Product not found in offline cache.');
-      const basePrice = parseFloat(cached.price);
-      const pieces    = cached.pieces_per_unit || 1;
-      const cut       = cached.is_cuttable || false;
-      selling_price   = cut ? basePrice / pieces : basePrice;
-      stock_id        = cached.stock_id;
-      if (!selling_price || !stock_id) throw new Error('Offline cache is missing price or stock data. Please reconnect to refresh.');
-    } else {
-      if (cachedPrice && cachedStockId) {
-        const basePrice = parseFloat(cachedPrice);
-        selling_price   = isCuttable && piecesPerUnit > 1 ? basePrice / piecesPerUnit : basePrice;
-        stock_id        = parseInt(cachedStockId);
-      } else {
-        const details   = await api.get(`/product/${productId}/details`);
-        const stockData = await api.get(`/stock/by-product/${productId}`);
-        const basePrice = parseFloat(details.price);
-        const pieces    = details.pieces_per_unit || 1;
-        selling_price   = details.is_cuttable ? basePrice / pieces : basePrice;
-        stock_id        = stockData.id;
-        isCuttable      = details.is_cuttable;
-        subUnit         = details.sub_unit || '';
-        piecesPerUnit   = pieces;
-      }
-    }
+    let selling_price = parseFloat(sellingPrice);
+    let stock_id      = parseInt(cachedStockId);
+
+    if (!selling_price || isNaN(selling_price)) throw new Error('Invalid price for this product.');
+    if (!stock_id || isNaN(stock_id)) throw new Error('Stock ID missing. Please refresh and try again.');
+
     cart.push({
-      product_id:      productId,
-      product_name:    productName,
+      product_id:    productId,
+      product_name:  productName,
       stock_id,
       selling_price,
-      available_qty:   availableQty,
-      qty:             1,
-      is_cuttable:     isCuttable,
-      sub_unit:        subUnit,
+      available_qty: availableQty,
+      qty:           1,
+      is_cut:        isCut,
+      sub_unit:      subUnit,
       pieces_per_unit: piecesPerUnit,
     });
     renderCart();
@@ -678,7 +648,7 @@ async function addToCart(productId, productName, availableQty, cachedPrice, cach
   }
 }
 
-//Render cart
+// ── Render cart ───────────────────────────────────────────────────────────────
 
 function renderCart() {
   const cartSection = document.getElementById('cart-section');
@@ -691,27 +661,32 @@ function renderCart() {
   }
   cartSection.style.display = 'block';
   emptyHint.style.display   = 'none';
+
   cartItemsEl.innerHTML = cart.map((item, idx) => `
     <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <span style="font-size:13px;font-weight:500;color:var(--text);">${item.product_name}</span>
+        <div>
+          <span style="font-size:13px;font-weight:500;color:var(--text);">${item.product_name}</span>
+          <span style="font-size:11px;color:var(--muted);margin-left:8px;">
+            ${item.is_cut ? `per ${item.sub_unit}` : 'whole card'}
+          </span>
+        </div>
         <button class="btn btn-ghost remove-cart-item" data-idx="${idx}"
           style="font-size:11px;padding:3px 8px;color:#f87171;">Remove</button>
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
         <div style="font-size:12px;color:var(--muted);">
-          Unit price: <strong style="color:var(--text);">${fmt(item.selling_price)}</strong>
-          ${item.is_cuttable ? `<span style="color:var(--muted);"> / ${item.sub_unit}</span>` : ''}
+          Unit price: <strong style="color:var(--text);">₦${fmt(item.selling_price)}</strong>
         </div>
         <div style="display:flex;align-items:center;gap:6px;">
           <label style="font-size:12px;color:var(--muted);">Qty:</label>
           <input type="number" class="field-input cart-qty-input" data-idx="${idx}"
             value="${item.qty}" min="1" max="${item.available_qty}"
             style="width:70px;padding:4px 8px;font-size:13px;text-align:center;"/>
-          <span style="font-size:11px;color:var(--muted);">/ ${item.available_qty} ${item.is_cuttable ? item.sub_unit + 's' : 'units'}</span>
+          <span style="font-size:11px;color:var(--muted);">/ ${item.available_qty} ${item.is_cut ? item.sub_unit + 's' : 'cards'}</span>
         </div>
         <div style="font-size:13px;font-weight:500;color:var(--accent-lt);margin-left:auto;">
-          ${fmt(item.qty * item.selling_price)}
+          ₦${fmt(item.qty * item.selling_price)}
         </div>
       </div>
     </div>`).join('');
@@ -768,7 +743,7 @@ function updateTotals() {
   if (totalEl)    totalEl.textContent    = `₦${fmt(amountToPay)}`;
 }
 
-//Submit sale
+// ── Submit sale ───────────────────────────────────────────────────────────────
 
 async function submitSale() {
   const errEl  = document.getElementById('ns-error');
@@ -807,13 +782,22 @@ async function submitSale() {
   btn.innerHTML = '<span class="spinner"></span> Processing...';
 
   const txn_id = generateTxnId();
-  const items  = cart.map(i => ({
-    stock_id:      i.stock_id,
-    quantity_sold: i.qty,
-    selling_price: i.selling_price,
-  }));
 
-  // Offline: queue the sale
+  // For cut items, convert tablet qty back to fractional stock units
+  const items = cart.map(i => {
+    let quantity_sold = i.qty;
+    if (i.is_cut && i.pieces_per_unit > 1) {
+      // Send fractional quantity so backend deducts correctly
+      // e.g. 3 tablets from a 10-tablet strip = 0.3 strips deducted
+      quantity_sold = i.qty / i.pieces_per_unit;
+    }
+    return {
+      stock_id:      i.stock_id,
+      quantity_sold: quantity_sold,
+      selling_price: i.selling_price,
+    };
+  });
+
   if (!navigator.onLine) {
     await queueSale(txn_id, items);
     cart = [];
@@ -825,7 +809,6 @@ async function submitSale() {
     return;
   }
 
-  // Online: submit with txn_id and discount
   try {
     const receipt = await api.post('/sales/create', { txn_id, items, discount });
     sucMsg.innerHTML = `Sale recorded! Receipt #${receipt.receipt_id} - Paid: ₦${fmt(receipt.amount_paid)}
@@ -852,7 +835,7 @@ async function submitSale() {
   }
 }
 
-//Receipt lookup 
+// ── Receipt lookup ────────────────────────────────────────────────────────────
 
 async function fetchReceipt(id) {
   const container = document.getElementById('receipt-result');
@@ -945,21 +928,18 @@ async function fetchReceipt(id) {
 
     document.getElementById('print-receipt-btn')?.addEventListener('click', () => printReceipt(r));
     document.getElementById('download-receipt-btn')?.addEventListener('click', () => downloadReceiptPDF(r));
-
     document.getElementById(`void-btn-${id}`)?.addEventListener('click', () => {
       pendingVoidSaleId = id;
       document.getElementById('void-reason').value = '';
       document.getElementById('void-error').classList.remove('show');
       openModal('void-modal');
     });
-
     document.getElementById(`void-request-btn-${id}`)?.addEventListener('click', () => {
       pendingVoidSaleId = id;
       document.getElementById('void-request-reason').value = '';
       document.getElementById('void-request-error').classList.remove('show');
       openModal('void-request-modal');
     });
-
   } catch (err) {
     container.innerHTML = `<div style="color:#f87171;font-size:13px;">${err.message}</div>`;
   }

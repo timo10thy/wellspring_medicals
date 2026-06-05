@@ -59,7 +59,7 @@ export function renderProducts() {
             <table class="data-table">
               <thead><tr>
                 <th>Name</th>
-                <th>Price (₦)</th>
+                <th>Card Price (₦)</th>
                 <th>Sold As</th>
                 <th>Description</th>
                 <th>Status</th>
@@ -92,7 +92,7 @@ export function renderProducts() {
         </div>
         <div class="ap-grid-2">
           <div>
-            <label class="field-label">Price (₦) <span style="font-size:11px;color:var(--muted);">per base unit</span></label>
+            <label class="field-label">Card/Strip Price (₦) <span style="font-size:11px;color:var(--muted);">selling price per card</span></label>
             <input class="field-input" id="ap-price" type="number" placeholder="0.00" min="0" step="0.01"/>
             <p class="field-hint hint-error" id="ap-price-hint"></p>
           </div>
@@ -125,16 +125,23 @@ export function renderProducts() {
         </div>
 
         <!-- Cut fields — shown only when cuttable is checked -->
-        <div class="cut-fields ap-grid-2" id="ap-cut-fields">
-          <div>
-            <label class="field-label">Sub-unit name</label>
-            <input class="field-input" id="ap-sub-unit" type="text" placeholder="e.g. tablet, capsule"/>
-            <p class="field-hint hint-error" id="ap-sub-unit-hint"></p>
+        <div class="cut-fields" id="ap-cut-fields">
+          <div class="ap-grid-2">
+            <div>
+              <label class="field-label">Sub-unit name</label>
+              <input class="field-input" id="ap-sub-unit" type="text" placeholder="e.g. tablet, capsule"/>
+              <p class="field-hint hint-error" id="ap-sub-unit-hint"></p>
+            </div>
+            <div>
+              <label class="field-label">Pieces per card/strip</label>
+              <input class="field-input" id="ap-pieces" type="number" min="1" placeholder="e.g. 10"/>
+              <p class="field-hint hint-error" id="ap-pieces-hint"></p>
+            </div>
           </div>
           <div>
-            <label class="field-label">Pieces per base unit</label>
-            <input class="field-input" id="ap-pieces" type="number" min="1" placeholder="e.g. 10"/>
-            <p class="field-hint hint-error" id="ap-pieces-hint"></p>
+            <label class="field-label">Cut selling price (₦) <span style="font-size:11px;color:var(--muted);">price per tablet/capsule</span></label>
+            <input class="field-input" id="ap-cut-price" type="number" placeholder="0.00" min="0" step="0.01"/>
+            <p class="field-hint hint-error" id="ap-cut-price-hint"></p>
           </div>
         </div>
 
@@ -157,7 +164,7 @@ export function renderProducts() {
       <div style="display:flex;flex-direction:column;gap:14px;">
         <input type="hidden" id="ep-product-id"/>
         <div>
-          <label class="field-label">Price (₦) <span style="font-size:11px;color:var(--muted);">per base unit</span></label>
+          <label class="field-label">Card/Strip Price (₦) <span style="font-size:11px;color:var(--muted);">selling price per card</span></label>
           <input class="field-input" id="ep-price" type="number" placeholder="0.00" min="0" step="0.01"/>
           <p class="field-hint hint-error" id="ep-price-hint"></p>
         </div>
@@ -176,16 +183,23 @@ export function renderProducts() {
           </div>
         </div>
 
-        <div class="cut-fields ap-grid-2" id="ep-cut-fields">
-          <div>
-            <label class="field-label">Sub-unit name</label>
-            <input class="field-input" id="ep-sub-unit" type="text" placeholder="e.g. tablet, capsule"/>
-            <p class="field-hint hint-error" id="ep-sub-unit-hint"></p>
+        <div class="cut-fields" id="ep-cut-fields">
+          <div class="ap-grid-2">
+            <div>
+              <label class="field-label">Sub-unit name</label>
+              <input class="field-input" id="ep-sub-unit" type="text" placeholder="e.g. tablet, capsule"/>
+              <p class="field-hint hint-error" id="ep-sub-unit-hint"></p>
+            </div>
+            <div>
+              <label class="field-label">Pieces per card/strip</label>
+              <input class="field-input" id="ep-pieces" type="number" min="1" placeholder="e.g. 10"/>
+              <p class="field-hint hint-error" id="ep-pieces-hint"></p>
+            </div>
           </div>
           <div>
-            <label class="field-label">Pieces per base unit</label>
-            <input class="field-input" id="ep-pieces" type="number" min="1" placeholder="e.g. 10"/>
-            <p class="field-hint hint-error" id="ep-pieces-hint"></p>
+            <label class="field-label">Cut selling price (₦) <span style="font-size:11px;color:var(--muted);">price per tablet/capsule</span></label>
+            <input class="field-input" id="ep-cut-price" type="number" placeholder="0.00" min="0" step="0.01"/>
+            <p class="field-hint hint-error" id="ep-cut-price-hint"></p>
           </div>
         </div>
 
@@ -203,23 +217,22 @@ export async function initProducts() {
   bindModalClose('add-product-modal');
   bindModalClose('edit-product-modal');
 
-  // Toggle cut fields visibility — Add modal
   document.getElementById('ap-cuttable')?.addEventListener('change', (e) => {
     document.getElementById('ap-cut-fields').classList.toggle('visible', e.target.checked);
   });
 
-  // Toggle cut fields visibility — Edit modal
   document.getElementById('ep-cuttable')?.addEventListener('change', (e) => {
     document.getElementById('ep-cut-fields').classList.toggle('visible', e.target.checked);
   });
 
   document.getElementById('add-product-btn')?.addEventListener('click', () => {
-    document.getElementById('ap-name').value    = '';
-    document.getElementById('ap-price').value   = '';
-    document.getElementById('ap-desc').value    = '';
+    document.getElementById('ap-name').value       = '';
+    document.getElementById('ap-price').value      = '';
+    document.getElementById('ap-desc').value       = '';
     document.getElementById('ap-cuttable').checked = false;
-    document.getElementById('ap-sub-unit').value = '';
-    document.getElementById('ap-pieces').value   = '';
+    document.getElementById('ap-sub-unit').value   = '';
+    document.getElementById('ap-pieces').value     = '';
+    document.getElementById('ap-cut-price').value  = '';
     document.getElementById('ap-cut-fields').classList.remove('visible');
     document.getElementById('ap-error').classList.remove('show');
     openModal('add-product-modal');
@@ -254,8 +267,8 @@ function renderTable(data) {
       <td>${p.price != null ? fmt(p.price) : '—'}</td>
       <td style="font-size:12px;color:var(--muted);">
         ${p.is_cuttable
-          ? `<span class="badge badge-green">Per ${p.sub_unit || 'sub-unit'} (${p.pieces_per_unit || '?'}/unit)</span>`
-          : '<span class="badge">Whole unit</span>'}
+          ? `<span class="badge badge-green">Per ${p.sub_unit || 'sub-unit'} @ ₦${p.cut_selling_price != null ? fmt(p.cut_selling_price) : '?'} (${p.pieces_per_unit || '?'}/card)</span>`
+          : '<span class="badge">Whole card only</span>'}
       </td>
       <td style="color:var(--muted);font-size:12px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
         ${p.description || '—'}
@@ -287,6 +300,7 @@ async function openEditModal(productId) {
     document.getElementById('ep-cuttable').checked    = p.is_cuttable;
     document.getElementById('ep-sub-unit').value      = p.sub_unit || '';
     document.getElementById('ep-pieces').value        = p.pieces_per_unit || '';
+    document.getElementById('ep-cut-price').value     = p.cut_selling_price || '';
     document.getElementById('ep-cut-fields').classList.toggle('visible', p.is_cuttable);
     document.getElementById('ep-error').classList.remove('show');
     openModal('edit-product-modal');
@@ -300,26 +314,29 @@ async function submitAddProduct() {
   const btn   = document.getElementById('ap-submit');
   errEl.classList.remove('show');
 
-  const name        = document.getElementById('ap-name').value.trim();
-  const price       = parseFloat(document.getElementById('ap-price').value);
-  const desc        = document.getElementById('ap-desc').value.trim();
-  const active      = document.getElementById('ap-active').value === 'true';
-  const isCuttable  = document.getElementById('ap-cuttable').checked;
-  const subUnit     = document.getElementById('ap-sub-unit').value.trim();
-  const pieces      = parseInt(document.getElementById('ap-pieces').value);
+  const name       = document.getElementById('ap-name').value.trim();
+  const price      = parseFloat(document.getElementById('ap-price').value);
+  const desc       = document.getElementById('ap-desc').value.trim();
+  const active     = document.getElementById('ap-active').value === 'true';
+  const isCuttable = document.getElementById('ap-cuttable').checked;
+  const subUnit    = document.getElementById('ap-sub-unit').value.trim();
+  const pieces     = parseInt(document.getElementById('ap-pieces').value);
+  const cutPrice   = parseFloat(document.getElementById('ap-cut-price').value);
 
   let ok = true;
-  if (!name)         { document.getElementById('ap-name-hint').textContent  = 'Name is required.';          ok = false; }
-  else               { document.getElementById('ap-name-hint').textContent  = ''; }
-  if (!price || price <= 0) { document.getElementById('ap-price-hint').textContent = 'Enter a valid price.'; ok = false; }
-  else               { document.getElementById('ap-price-hint').textContent = ''; }
-  if (!desc)         { document.getElementById('ap-desc-hint').textContent  = 'Description is required.';   ok = false; }
-  else               { document.getElementById('ap-desc-hint').textContent  = ''; }
+  if (!name)              { document.getElementById('ap-name-hint').textContent  = 'Name is required.';          ok = false; }
+  else                    { document.getElementById('ap-name-hint').textContent  = ''; }
+  if (!price || price <= 0) { document.getElementById('ap-price-hint').textContent = 'Enter a valid price.';     ok = false; }
+  else                    { document.getElementById('ap-price-hint').textContent = ''; }
+  if (!desc)              { document.getElementById('ap-desc-hint').textContent  = 'Description is required.';   ok = false; }
+  else                    { document.getElementById('ap-desc-hint').textContent  = ''; }
   if (isCuttable) {
-    if (!subUnit)    { document.getElementById('ap-sub-unit-hint').textContent = 'Sub-unit is required.';   ok = false; }
-    else             { document.getElementById('ap-sub-unit-hint').textContent = ''; }
-    if (!pieces || pieces < 1) { document.getElementById('ap-pieces-hint').textContent = 'Enter pieces per unit.'; ok = false; }
-    else             { document.getElementById('ap-pieces-hint').textContent = ''; }
+    if (!subUnit)         { document.getElementById('ap-sub-unit-hint').textContent  = 'Sub-unit is required.';  ok = false; }
+    else                  { document.getElementById('ap-sub-unit-hint').textContent  = ''; }
+    if (!pieces || pieces < 1) { document.getElementById('ap-pieces-hint').textContent = 'Enter pieces per card.'; ok = false; }
+    else                  { document.getElementById('ap-pieces-hint').textContent  = ''; }
+    if (!cutPrice || cutPrice <= 0) { document.getElementById('ap-cut-price-hint').textContent = 'Enter cut selling price.'; ok = false; }
+    else                  { document.getElementById('ap-cut-price-hint').textContent = ''; }
   }
   if (!ok) return;
 
@@ -328,11 +345,12 @@ async function submitAddProduct() {
     await api.post('/product/create', {
       name,
       price,
-      is_active:       active,
-      description:     desc,
-      is_cuttable:     isCuttable,
-      sub_unit:        isCuttable ? subUnit : null,
-      pieces_per_unit: isCuttable ? pieces  : null,
+      is_active:         active,
+      description:       desc,
+      is_cuttable:       isCuttable,
+      sub_unit:          isCuttable ? subUnit   : null,
+      pieces_per_unit:   isCuttable ? pieces    : null,
+      cut_selling_price: isCuttable ? cutPrice  : null,
     });
     closeModal('add-product-modal');
     await loadProducts();
@@ -354,15 +372,18 @@ async function submitEditProduct() {
   const isCuttable = document.getElementById('ep-cuttable').checked;
   const subUnit    = document.getElementById('ep-sub-unit').value.trim();
   const pieces     = parseInt(document.getElementById('ep-pieces').value);
+  const cutPrice   = parseFloat(document.getElementById('ep-cut-price').value);
 
   let ok = true;
   if (!price || price <= 0) { document.getElementById('ep-price-hint').textContent = 'Enter a valid price.'; ok = false; }
   else                      { document.getElementById('ep-price-hint').textContent = ''; }
   if (isCuttable) {
-    if (!subUnit)  { document.getElementById('ep-sub-unit-hint').textContent = 'Sub-unit is required.';   ok = false; }
-    else           { document.getElementById('ep-sub-unit-hint').textContent = ''; }
-    if (!pieces || pieces < 1) { document.getElementById('ep-pieces-hint').textContent = 'Enter pieces per unit.'; ok = false; }
-    else           { document.getElementById('ep-pieces-hint').textContent = ''; }
+    if (!subUnit)    { document.getElementById('ep-sub-unit-hint').textContent  = 'Sub-unit is required.';   ok = false; }
+    else             { document.getElementById('ep-sub-unit-hint').textContent  = ''; }
+    if (!pieces || pieces < 1) { document.getElementById('ep-pieces-hint').textContent = 'Enter pieces per card.'; ok = false; }
+    else             { document.getElementById('ep-pieces-hint').textContent  = ''; }
+    if (!cutPrice || cutPrice <= 0) { document.getElementById('ep-cut-price-hint').textContent = 'Enter cut selling price.'; ok = false; }
+    else             { document.getElementById('ep-cut-price-hint').textContent = ''; }
   }
   if (!ok) return;
 
@@ -370,9 +391,10 @@ async function submitEditProduct() {
   try {
     await api.patch(`/product/update/${id}`, {
       price,
-      is_cuttable:     isCuttable,
-      sub_unit:        isCuttable ? subUnit : null,
-      pieces_per_unit: isCuttable ? pieces  : null,
+      is_cuttable:       isCuttable,
+      sub_unit:          isCuttable ? subUnit  : null,
+      pieces_per_unit:   isCuttable ? pieces   : null,
+      cut_selling_price: isCuttable ? cutPrice : null,
     });
     closeModal('edit-product-modal');
     await loadProducts();
