@@ -9,11 +9,10 @@ class ProductCreate(BaseModel):
     price:       float
     is_active:   bool = True
     description: str
-
-    # Cut drug support
-    is_cuttable:     bool         = False
-    sub_unit:        Optional[str] = None   # e.g. "tablet", "capsule"
-    pieces_per_unit: Optional[int] = None   # e.g. 10
+    is_cuttable:       bool            = False
+    sub_unit:          Optional[str]   = None
+    pieces_per_unit:   Optional[int]   = None
+    cut_selling_price: Optional[float] = None
 
     @validator("name")
     def normalize_name(cls, v: str) -> str:
@@ -43,19 +42,21 @@ class ProductResponse(BaseModel):
 
 
 class ProductDetailResponse(BaseModel):
-    id:                    int
-    name:                  str
-    price:                 float
-    is_active:             bool
-    description:           str
+    id:                     int
+    name:                   str
+    price:                  float
+    is_active:              bool
+    description:            str
     current_stock_quantity: int
-    is_cuttable:           bool
-    sub_unit:              Optional[str] = None
-    pieces_per_unit:       Optional[int] = None
+    is_cuttable:            bool
+    sub_unit:               Optional[str]   = None
+    pieces_per_unit:        Optional[int]   = None
+    cut_selling_price:      Optional[float] = None
 
 
 class ProductUpdate(BaseModel):
-    price:           float
-    is_cuttable:     bool          = False
-    sub_unit:        Optional[str] = None
-    pieces_per_unit: Optional[int] = None
+    price:             float
+    is_cuttable:       bool            = False
+    sub_unit:          Optional[str]   = None
+    pieces_per_unit:   Optional[int]   = None
+    cut_selling_price: Optional[float] = None

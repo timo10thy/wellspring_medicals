@@ -31,14 +31,17 @@ class StockConsumptionReport(BaseModel):
 
 
 class TotalProductStock(BaseModel):
-    product_id: int
-    product_name: str
-    total_quantity: int
-    price: Optional[float] = None
-    stock_id: Optional[int] = None
-    is_cuttable: Optional[bool] = None
-    sub_unit: Optional[str] = None
-    pieces_per_unit: Optional[int] = None
+    product_id:        int
+    product_name:      str
+    total_quantity:    int
+    price:             Optional[float] = None
+    stock_id:          Optional[int]   = None
+    is_cuttable:       Optional[bool]  = None
+    sub_unit:          Optional[str]   = None
+    pieces_per_unit:   Optional[int]   = None
+    cut_selling_price: Optional[float] = None
+
+
 class StockExpireAlert(BaseModel):
     stock_id: int
     product_id: int

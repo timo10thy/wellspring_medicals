@@ -300,7 +300,7 @@ export async function initSales() {
   if (isAdmin()) loadVoidRequests();
 }
 
-// ── Offline mode ──────────────────────────────────────────────────────────────
+//Offline mode
 
 function initOfflineMode() {
   renderFailedSales();
@@ -380,7 +380,7 @@ async function renderFailedSales() {
   });
 }
 
-// ── Shift helpers ─────────────────────────────────────────────────────────────
+//Shift helpers
 
 async function loadMyShift() {
   try {
@@ -452,7 +452,7 @@ async function openShiftFromBanner() {
   }
 }
 
-// ── Void requests (admin) ─────────────────────────────────────────────────────
+// Void requests (admin)
 
 async function loadVoidRequests() {
   const section = document.getElementById('void-requests-section');
@@ -511,7 +511,7 @@ async function loadVoidRequests() {
   }
 }
 
-// ── Modal helpers ─────────────────────────────────────────────────────────────
+//Modal helpers
 
 function resetSaleModal() {
   cart = [];
@@ -526,7 +526,7 @@ function resetSaleModal() {
   renderCart();
 }
 
-// ── Search product ────────────────────────────────────────────────────────────
+//Search product
 
 async function searchProduct() {
   const query = document.getElementById('ns-product-search').value.trim();
@@ -616,7 +616,7 @@ async function searchProduct() {
   }
 }
 
-// ── Add to cart ───────────────────────────────────────────────────────────────
+//Add to cart 
 
 async function addToCart(productId, productName, availableQty, cachedPrice, cachedStockId, isCuttable, subUnit, piecesPerUnit) {
   const errEl = document.getElementById('ns-error');
@@ -678,7 +678,7 @@ async function addToCart(productId, productName, availableQty, cachedPrice, cach
   }
 }
 
-// ── Render cart ───────────────────────────────────────────────────────────────
+//Render cart
 
 function renderCart() {
   const cartSection = document.getElementById('cart-section');
@@ -768,7 +768,7 @@ function updateTotals() {
   if (totalEl)    totalEl.textContent    = `₦${fmt(amountToPay)}`;
 }
 
-// ── Submit sale ───────────────────────────────────────────────────────────────
+//Submit sale
 
 async function submitSale() {
   const errEl  = document.getElementById('ns-error');
@@ -852,7 +852,7 @@ async function submitSale() {
   }
 }
 
-// ── Receipt lookup ────────────────────────────────────────────────────────────
+//Receipt lookup 
 
 async function fetchReceipt(id) {
   const container = document.getElementById('receipt-result');

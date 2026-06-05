@@ -13,9 +13,10 @@ class Products(Base):
     description    = Column(String(500), nullable=False)
 
     # Cut drug support
-    is_cuttable      = Column(Boolean, nullable=False, default=False, server_default='false')
-    sub_unit         = Column(String(50), nullable=True)   # e.g. "tablet", "capsule"
-    pieces_per_unit  = Column(Integer, nullable=True)      # e.g. 10 tablets per strip
+    is_cuttable       = Column(Boolean, nullable=False, default=False, server_default='false')
+    sub_unit          = Column(String(50), nullable=True)
+    pieces_per_unit   = Column(Integer, nullable=True)
+    cut_selling_price = Column(Numeric(10, 2), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(

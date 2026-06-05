@@ -240,11 +240,13 @@ def search_total_product_stock(
             Products.is_cuttable.label("is_cuttable"),
             Products.sub_unit.label("sub_unit"),
             Products.pieces_per_unit.label("pieces_per_unit"),
+            Products.cut_selling_price.label("cut_selling_price"),
         )
         .join(Stocks, Stocks.product_id == Products.id)
         .outerjoin(best_stock, best_stock.c.product_id == Products.id)
         .group_by(Products.id, Products.name, Products.price, best_stock.c.stock_id,
-                  Products.is_cuttable, Products.sub_unit, Products.pieces_per_unit)
+                  Products.is_cuttable, Products.sub_unit, Products.pieces_per_unit,
+                  Products.cut_selling_price)
     )
 
     if product_name:
