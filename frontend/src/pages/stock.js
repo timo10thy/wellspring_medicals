@@ -60,6 +60,58 @@ export function renderStock() {
       color: var(--muted);
     }
     .calc-preview-row strong { color: var(--accent-lt); font-size: 13px; }
+
+    /* Stock batches table inside edit modal */
+    .batches-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .batches-table th {
+      text-align: left;
+      padding: 7px 10px;
+      color: var(--muted);
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .batches-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border2);
+      color: var(--text);
+    }
+    .batches-table tr:last-child td { border-bottom: none; }
+    .batches-table tr.selected-batch td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+    .select-batch-btn {
+      padding: 4px 10px;
+      font-size: 11px;
+      border-radius: 5px;
+      border: 1px solid var(--accent);
+      background: none;
+      color: var(--accent);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .select-batch-btn:hover, .select-batch-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .edit-form-section {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .edit-form-section.show { display: flex; }
+    .correction-info {
+      background: color-mix(in srgb, var(--accent) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .correction-info strong { color: var(--accent-lt); }
   </style>
 
   <div class="page-enter app-layout">
@@ -74,7 +126,10 @@ export function renderStock() {
             <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;">${icons.search}</span>
             <input id="stock-search" class="field-input" type="text" placeholder="Search by product name…" style="padding-left:36px;"/>
           </div>
-          <button id="add-stock-btn" class="btn btn-primary">${icons.plus} Add Stock</button>
+          <div style="display:flex;gap:8px;">
+            <button id="edit-stock-btn" class="btn btn-ghost">${icons.edit ?? '✏️'} Edit Stock</button>
+            <button id="add-stock-btn" class="btn btn-primary">${icons.plus} Add Stock</button>
+          </div>
         </div>
 
         <!-- Total stock table -->
@@ -85,9 +140,9 @@ export function renderStock() {
           <div style="overflow-x:auto;">
             <table class="data-table">
               <thead><tr>
-                <th>Product ID</th><th>Product Name</th><th>Total Quantity</th><th>Status</th>
+                <th>Product ID</th><th>Product Name</th><th>Total Quantity</th><th>Status</th><th>Actions</th>
               </tr></thead>
-              <tbody id="stock-tbody">${tableLoadingRow(4)}</tbody>
+              <tbody id="stock-tbody">${tableLoadingRow(5)}</tbody>
             </table>
           </div>
         </div>
@@ -194,6 +249,66 @@ export function renderStock() {
         </div>
       </form>
     </div>
+  </div>
+
+  <!-- Edit Stock Modal -->
+  <div id="edit-stock-modal" class="modal-backdrop">
+    <div class="modal" style="max-width:560px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+        <h2 style="font-family:var(--font-head);font-size:20px;color:var(--text)">✏️ Edit Stock</h2>
+        <button data-close-modal="edit-stock-modal" class="btn btn-ghost" style="padding:6px 10px;">${icons.x}</button>
+      </div>
+
+      <div id="es-error"   class="banner banner-error"  style="margin-bottom:12px;"><span></span></div>
+      <div id="es-success" class="banner banner-success" style="margin-bottom:12px;"><span>Stock updated successfully.</span></div>
+
+      <!-- Step 1: Select product batch -->
+      <div id="es-step1">
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">
+          Select a stock batch to correct:
+        </p>
+        <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
+          <table class="batches-table">
+            <thead><tr>
+              <th>Batch ID</th><th>Cost Price</th><th>Qty</th><th>Expiry</th><th></th>
+            </tr></thead>
+            <tbody id="es-batches-tbody">
+              <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Step 2: Edit form (shown after batch selected) -->
+      <div id="es-step2" class="edit-form-section">
+        <div class="correction-info" id="es-selected-info">
+          Editing batch <strong id="es-batch-label">—</strong>
+        </div>
+
+        <div class="as-grid-2">
+          <div>
+            <label class="field-label">Cost Price per Unit (₦)</label>
+            <input class="field-input" id="es-cost" type="number" placeholder="e.g. 137.00" min="0.01" step="0.01"/>
+            <p class="field-hint hint-error" id="es-cost-hint"></p>
+          </div>
+          <div>
+            <label class="field-label">Quantity <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+            <input class="field-input" id="es-qty" type="number" placeholder="Leave blank to keep" min="0"/>
+          </div>
+        </div>
+
+        <div>
+          <label class="field-label">Expiry Date <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+          <input class="field-input" id="es-expiry" type="date"/>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
+          <button type="button" id="es-back-btn" class="btn btn-ghost">← Back</button>
+          <button type="button" id="es-submit" class="btn btn-primary">Save Correction</button>
+        </div>
+      </div>
+
+    </div>
   </div>`;
 }
 
@@ -201,16 +316,23 @@ export async function initStock() {
   bindSidebar();
   bindModalClose('add-stock-modal');
 
+  // Close edit modal via x button
+  document.querySelector('[data-close-modal="edit-stock-modal"]')
+    ?.addEventListener('click', () => closeModal('edit-stock-modal'));
+
   document.getElementById('add-stock-btn')?.addEventListener('click', () => {
     document.getElementById('add-stock-form')?.reset();
     document.getElementById('as-error').classList.remove('show');
     document.getElementById('as-success').classList.remove('show');
     ['as-pid-hint','as-qty-hint','as-cost-hint','as-packs-hint','as-upp-hint','as-pack-cost-hint']
       .forEach(id => { const el = document.getElementById(id); if (el) el.textContent = ''; });
-    // Reset to units mode
     setMode('units');
     document.getElementById('calc-preview').classList.remove('show');
     openModal('add-stock-modal');
+  });
+
+  document.getElementById('edit-stock-btn')?.addEventListener('click', () => {
+    openEditModal(null);
   });
 
   await loadStock();
@@ -218,6 +340,7 @@ export async function initStock() {
   bindAddStock();
   bindModeToggle();
   bindPackInputs();
+  bindEditStock();
 }
 
 // ── Mode toggle ───────────────────────────────────────────────────────────────
@@ -275,13 +398,13 @@ async function loadStock(query = '') {
     const data = await api.get(url);
     renderTable(data);
   } catch (err) {
-    document.getElementById('stock-tbody').innerHTML = tableEmptyRow(4, err.message);
+    document.getElementById('stock-tbody').innerHTML = tableEmptyRow(5, err.message);
   }
 }
 
 function renderTable(data) {
   const tbody = document.getElementById('stock-tbody');
-  if (!data.length) { tbody.innerHTML = tableEmptyRow(4, 'No stock records found.'); return; }
+  if (!data.length) { tbody.innerHTML = tableEmptyRow(5, 'No stock records found.'); return; }
 
   tbody.innerHTML = data.map(s => {
     const status = s.total_quantity <= 0
@@ -294,8 +417,24 @@ function renderTable(data) {
       <td style="font-weight:500">${s.product_name}</td>
       <td><strong>${s.total_quantity.toLocaleString()}</strong></td>
       <td>${status}</td>
+      <td>
+        <button
+          class="btn btn-ghost edit-product-stock-btn"
+          style="padding:4px 10px;font-size:12px;"
+          data-product-id="${s.product_id}"
+          data-product-name="${s.product_name}">
+          ✏️ Edit
+        </button>
+      </td>
     </tr>`;
   }).join('');
+
+  // Bind per-row edit buttons
+  document.querySelectorAll('.edit-product-stock-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      openEditModal(btn.dataset.productId, btn.dataset.productName);
+    });
+  });
 }
 
 function bindSearch() {
@@ -323,7 +462,6 @@ function bindAddStock() {
     let finalCost = null;
     let ok        = true;
 
-    // Validate product name
     if (!productName) {
       document.getElementById('as-pid-hint').textContent = 'Enter a product name.';
       ok = false;
@@ -332,7 +470,6 @@ function bindAddStock() {
     }
 
     if (currentMode === 'units') {
-      // ── Units mode validation ──
       const qty  = parseInt(document.getElementById('as-qty').value);
       const cost = parseFloat(document.getElementById('as-cost').value);
 
@@ -354,7 +491,6 @@ function bindAddStock() {
       finalCost = cost;
 
     } else {
-      // ── Packs mode validation ──
       const packs    = parseFloat(document.getElementById('as-packs').value);
       const upp      = parseFloat(document.getElementById('as-units-per-pack').value);
       const packCost = parseFloat(document.getElementById('as-pack-cost').value);
@@ -381,14 +517,13 @@ function bindAddStock() {
       }
 
       if (ok) {
-        finalQty  = Math.round(packs * upp);   // total units
-        finalCost = packCost / upp;             // cost per unit
+        finalQty  = Math.round(packs * upp);
+        finalCost = packCost / upp;
       }
     }
 
     if (!ok) return;
 
-    // Final safety check — should never happen but just in case
     if (finalQty < 1) {
       errEl.querySelector('span').textContent = 'Total quantity must be at least 1.';
       errEl.classList.add('show');
@@ -425,6 +560,142 @@ function bindAddStock() {
     } finally {
       btn.disabled = false;
       btn.innerHTML = 'Add Stock';
+    }
+  });
+}
+
+// ── Edit Stock ────────────────────────────────────────────────────────────────
+let selectedStockId = null;
+
+async function openEditModal(productId, productName = '') {
+  // Reset state
+  selectedStockId = null;
+  document.getElementById('es-error').classList.remove('show');
+  document.getElementById('es-success').classList.remove('show');
+  document.getElementById('es-step1').style.display = 'block';
+  document.getElementById('es-step2').classList.remove('show');
+  document.getElementById('es-cost').value = '';
+  document.getElementById('es-qty').value  = '';
+  document.getElementById('es-expiry').value = '';
+  document.getElementById('es-cost-hint').textContent = '';
+
+  openModal('edit-stock-modal');
+
+  const tbody = document.getElementById('es-batches-tbody');
+  tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">Loading batches…</td></tr>`;
+
+  try {
+    // Fetch all batches for this product (or all products if none selected)
+    let batches;
+    if (productId) {
+      batches = await api.get(`/stock/batches/by-product/${productId}`);
+    } else {
+      batches = await api.get('/stock/batches/all');
+    }
+
+    if (!batches || !batches.length) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No stock batches found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = batches.map(b => `
+      <tr id="batch-row-${b.id}">
+        <td style="color:var(--muted)">#${b.id}</td>
+        <td>₦${fmt(b.cost_price)}</td>
+        <td>${b.quantity}</td>
+        <td>${b.expiry_date ? fmtDate(b.expiry_date) : '<span style="color:var(--muted)">—</span>'}</td>
+        <td>
+          <button class="select-batch-btn" data-stock-id="${b.id}" data-cost="${b.cost_price}" data-qty="${b.quantity}" data-expiry="${b.expiry_date ?? ''}">
+            Select
+          </button>
+        </td>
+      </tr>
+    `).join('');
+
+    // Bind select buttons
+    tbody.querySelectorAll('.select-batch-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedStockId = parseInt(btn.dataset.stockId);
+
+        // Highlight selected row
+        tbody.querySelectorAll('tr').forEach(r => r.classList.remove('selected-batch'));
+        tbody.querySelectorAll('.select-batch-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`batch-row-${selectedStockId}`)?.classList.add('selected-batch');
+        btn.classList.add('active');
+
+        // Pre-fill edit form
+        document.getElementById('es-cost').value   = btn.dataset.cost;
+        document.getElementById('es-qty').value    = btn.dataset.qty;
+        document.getElementById('es-expiry').value = btn.dataset.expiry || '';
+
+        document.getElementById('es-batch-label').textContent =
+          `#${selectedStockId} — cost ₦${fmt(btn.dataset.cost)}, qty ${btn.dataset.qty}`;
+
+        // Show step 2
+        document.getElementById('es-step2').classList.add('show');
+      });
+    });
+
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--danger,#e53e3e);padding:20px;">${err.message}</td></tr>`;
+  }
+}
+
+function bindEditStock() {
+  // Back button
+  document.getElementById('es-back-btn')?.addEventListener('click', () => {
+    document.getElementById('es-step2').classList.remove('show');
+    selectedStockId = null;
+    document.querySelectorAll('.select-batch-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#es-batches-tbody tr').forEach(r => r.classList.remove('selected-batch'));
+  });
+
+  // Submit correction
+  document.getElementById('es-submit')?.addEventListener('click', async () => {
+    const errEl = document.getElementById('es-error');
+    const sucEl = document.getElementById('es-success');
+    errEl.classList.remove('show');
+    sucEl.classList.remove('show');
+
+    if (!selectedStockId) {
+      errEl.querySelector('span').textContent = 'No batch selected.';
+      errEl.classList.add('show');
+      return;
+    }
+
+    const cost   = parseFloat(document.getElementById('es-cost').value);
+    const qtyVal = document.getElementById('es-qty').value;
+    const expiry = document.getElementById('es-expiry').value || null;
+
+    document.getElementById('es-cost-hint').textContent = '';
+
+    if (isNaN(cost) || cost <= 0) {
+      document.getElementById('es-cost-hint').textContent = 'Enter a valid cost price greater than 0.';
+      return;
+    }
+
+    const payload = { cost_price: cost };
+    if (qtyVal !== '') payload.quantity = parseInt(qtyVal);
+    if (expiry)        payload.expiry_date = expiry;
+
+    const btn = document.getElementById('es-submit');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Saving…';
+
+    try {
+      await api.patch(`/stock/${selectedStockId}/update`, payload);
+      sucEl.classList.add('show');
+      await loadStock();
+      setTimeout(() => {
+        sucEl.classList.remove('show');
+        closeModal('edit-stock-modal');
+      }, 1500);
+    } catch (err) {
+      errEl.querySelector('span').textContent = err.message;
+      errEl.classList.add('show');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = 'Save Correction';
     }
   });
 }

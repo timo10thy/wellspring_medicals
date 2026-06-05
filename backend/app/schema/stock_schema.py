@@ -51,3 +51,8 @@ class StockExpireAlert(BaseModel):
     quantity_affected: str
     stock_value_cost: float
     recommended_action: str
+
+class StockUpdate(BaseModel):
+    cost_price: Optional[float] = None
+    quantity: Optional[int] = None
+    expiry_date: Optional[date] = None

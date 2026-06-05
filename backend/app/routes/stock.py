@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, status, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, case
 from typing import Annotated
-from app.schema.stock_schema import StockCreate, StockResponse, StockConsumptionReport, TotalProductStock, StockExpireAlert
+from app.schema.stock_schema import StockCreate, StockResponse, StockConsumptionReport, TotalProductStock, StockExpireAlert,StockUpdate
 from app.routes.basemodel import get_db
 from app.middlewares.admin import admin_validation
 from app.middlewares.auth import AuthMiddleware
@@ -319,3 +319,67 @@ def search_available_products(
     if product_name:
         query = query.filter(Products.name.ilike(f"%{product_name}%"))
     return query.all()
+
+
+@router.patch("/{stock_id}/update", response_model=StockResponse, status_code=status.HTTP_200_OK)
+def update_stock(
+    stock_id: int,
+    stock_data: StockUpdate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(admin_validation)
+):
+    stock = db.query(Stocks).filter(Stocks.id == stock_id).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Stock not found")
+
+    changes = []
+
+    if stock_data.cost_price is not None:
+        if stock_data.cost_price <= 0:
+            raise HTTPException(status_code=400, detail="Cost price must be greater than zero")
+        old_cost = float(stock.cost_price)
+        stock.cost_price = stock_data.cost_price
+        changes.append(f"cost_price: {old_cost} → {stock_data.cost_price}")
+
+    if stock_data.quantity is not None:
+        if stock_data.quantity < 0:
+            raise HTTPException(status_code=400, detail="Quantity cannot be negative")
+        qty_before = stock.quantity
+        stock.quantity = stock_data.quantity
+        changes.append(f"quantity: {qty_before} → {stock_data.quantity}")
+
+    if stock_data.expiry_date is not None:
+        stock.expiry_date = stock_data.expiry_date
+        changes.append(f"expiry_date updated")
+
+    if not changes:
+        raise HTTPException(status_code=400, detail="No fields provided to update")
+
+    try:
+        db.commit()
+        db.refresh(stock)
+        log_movement(
+            db, stock,
+            movement_type='correction',
+            quantity_before=stock.quantity,
+            quantity_after=stock.quantity,
+            performed_by=current_admin.user_name,
+            note=f"Stock correction: {', '.join(changes)}",
+        )
+        db.commit()
+        return stock
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update stock")
+    
+@router.get("/batches/by-product/{product_id}", response_model=list[StockResponse], status_code=status.HTTP_200_OK)
+def get_batches_by_product(product_id: int, db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
+    batches = db.query(Stocks).filter(Stocks.product_id == product_id).order_by(Stocks.created_at.desc()).all()
+    if not batches:
+        raise HTTPException(status_code=404, detail="No stock batches found for this product")
+    return batches
+
+
+@router.get("/batches/all", response_model=list[StockResponse], status_code=status.HTTP_200_OK)
+def get_all_batches(db: Session = Depends(get_db), current_admin: User = Depends(admin_validation)):
+    return db.query(Stocks).order_by(Stocks.created_at.desc()).limit(100).all()
