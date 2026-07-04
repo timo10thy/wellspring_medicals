@@ -1,7 +1,7 @@
 import { auth }     from './auth.js';
 import { navigate } from './router.js';
 
-const IS_DEV = location.port === '5500';
+const IS_DEV = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 const BASE   = IS_DEV
   ? 'http://localhost:8002'
   : 'https://pharma-backend-fe2h.onrender.com';

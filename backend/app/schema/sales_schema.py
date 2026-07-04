@@ -24,14 +24,14 @@ class ReceiptResponse(BaseModel):
     total_amount: float
 
 class SaleItemCreate(BaseModel):
-    stock_id: int
+    product_id: int
     quantity_sold: int
     selling_price: float
 
 class MultiSaleCreate(BaseModel):
     items: list[SaleItemCreate]
     txn_id: Optional[str] = None
-    discount: Optional[float] = 0.0  # fixed amount discount on grand total
+    discount: Optional[float] = 0.0  
 
 class SaleItemResponse(BaseModel):
     sale_id: int

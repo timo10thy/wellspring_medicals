@@ -427,7 +427,7 @@ async function openShiftFromBanner() {
   }
 }
 
-// ── Void requests (admin) ─────────────────────────────────────────────────────
+//Void requests (admin)
 
 async function loadVoidRequests() {
   const section = document.getElementById('void-requests-section');
@@ -478,7 +478,7 @@ async function loadVoidRequests() {
   } catch { section.style.display = 'none'; }
 }
 
-// ── Modal helpers ─────────────────────────────────────────────────────────────
+// Modal helpers
 
 function resetSaleModal() {
   cart = [];
@@ -493,7 +493,7 @@ function resetSaleModal() {
   renderCart();
 }
 
-// ── Search product ────────────────────────────────────────────────────────────
+//Search product
 
 async function searchProduct() {
   const query = document.getElementById('ns-product-search').value.trim();
@@ -538,7 +538,6 @@ async function searchProduct() {
         data-tablet-qty="${tabletQty}"
         data-card-price="${p.price ?? ''}"
         data-cut-price="${p.cut_selling_price ?? ''}"
-        data-stock-id="${p.stock_id ?? ''}"
         data-is-cuttable="${p.is_cuttable ?? false}"
         data-sub-unit="${p.sub_unit ?? ''}"
         data-pieces-per-unit="${p.pieces_per_unit ?? 1}"
@@ -572,7 +571,6 @@ async function searchProduct() {
       const tabletQty = parseInt(item.getAttribute('data-tablet-qty'));
       const cardPrice = parseFloat(item.getAttribute('data-card-price'));
       const cutPrice  = parseFloat(item.getAttribute('data-cut-price'));
-      const stockId   = item.getAttribute('data-stock-id');
       const isCut     = item.getAttribute('data-is-cuttable') === 'true';
       const subUnit   = item.getAttribute('data-sub-unit');
       const pieces    = parseInt(item.getAttribute('data-pieces-per-unit')) || 1;
@@ -581,7 +579,7 @@ async function searchProduct() {
 
       item.querySelector('.add-whole-card')?.addEventListener('click', () => {
         if (cardQty <= 0) return;
-        addToCart(id, name, cardQty, cardPrice, stockId, false, '', 1);
+        addToCart(id, name, cardQty, cardPrice, false, '', 1);
       });
 
       item.querySelector('.add-cut')?.addEventListener('click', () => {
@@ -592,7 +590,7 @@ async function searchProduct() {
           document.getElementById('ns-error').classList.add('show');
           return;
         }
-        addToCart(id, name, tabletQty, cutPrice, stockId, true, subUnit, pieces);
+        addToCart(id, name, tabletQty, cutPrice, true, subUnit, pieces);
       });
     });
 
@@ -604,9 +602,9 @@ async function searchProduct() {
   }
 }
 
-// ── Add to cart ───────────────────────────────────────────────────────────────
+// ── Add to cart 
 
-async function addToCart(productId, productName, availableQty, sellingPrice, cachedStockId, isCut, subUnit, piecesPerUnit) {
+async function addToCart(productId, productName, availableQty, sellingPrice, isCut, subUnit, piecesPerUnit) {
   const errEl = document.getElementById('ns-error');
   errEl.classList.remove('show');
 
@@ -622,15 +620,11 @@ async function addToCart(productId, productName, availableQty, sellingPrice, cac
 
   try {
     let selling_price = parseFloat(sellingPrice);
-    let stock_id      = parseInt(cachedStockId);
-
     if (!selling_price || isNaN(selling_price)) throw new Error('Invalid price for this product.');
-    if (!stock_id || isNaN(stock_id)) throw new Error('Stock ID missing. Please refresh and try again.');
 
     cart.push({
       product_id:    productId,
       product_name:  productName,
-      stock_id,
       selling_price,
       available_qty: availableQty,
       qty:           1,
@@ -648,7 +642,7 @@ async function addToCart(productId, productName, availableQty, sellingPrice, cac
   }
 }
 
-// ── Render cart ───────────────────────────────────────────────────────────────
+//Render cart
 
 function renderCart() {
   const cartSection = document.getElementById('cart-section');
@@ -743,7 +737,7 @@ function updateTotals() {
   if (totalEl)    totalEl.textContent    = `₦${fmt(amountToPay)}`;
 }
 
-// ── Submit sale ───────────────────────────────────────────────────────────────
+// ── Submit sale 
 
 async function submitSale() {
   const errEl  = document.getElementById('ns-error');
@@ -792,7 +786,7 @@ async function submitSale() {
       quantity_sold = i.qty / i.pieces_per_unit;
     }
     return {
-      stock_id:      i.stock_id,
+      product_id:    i.product_id,
       quantity_sold: quantity_sold,
       selling_price: i.selling_price,
     };
@@ -818,7 +812,11 @@ async function submitSale() {
     cart = [];
     renderCart();
     if (!isAdmin()) loadMyShift();
-    printReceipt(receipt);
+    try {
+      printReceipt(receipt);
+    } catch (e) {
+      console.warn('Auto-print blocked:', e);
+    }
     setTimeout(() => {
       document.getElementById('view-receipt-link')?.addEventListener('click', () => {
         closeModal('new-sale-modal');
@@ -835,7 +833,7 @@ async function submitSale() {
   }
 }
 
-// ── Receipt lookup ────────────────────────────────────────────────────────────
+//Receipt lookup 
 
 async function fetchReceipt(id) {
   const container = document.getElementById('receipt-result');

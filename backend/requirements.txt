@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 psycopg2-binary
-SQLAlchemy
+SQLAlchemy==2.0.36
 python-dotenv
 bcrypt
 python-multipart
