@@ -4,7 +4,7 @@ from typing import Optional
 
 class SaleCreate(BaseModel):
     stock_id: int
-    quantity_sold: int
+    quantity_sold: float
     selling_price: float
 
 class SaleResponse(BaseModel):
@@ -19,13 +19,13 @@ class ReceiptResponse(BaseModel):
     sale_id: int
     sold_by: str
     product_name: str
-    quantity_sold: int
+    quantity_sold: float
     unit_price: float
     total_amount: float
 
 class SaleItemCreate(BaseModel):
     product_id: int
-    quantity_sold: int
+    quantity_sold: float
     selling_price: float
 
 class MultiSaleCreate(BaseModel):
@@ -36,7 +36,7 @@ class MultiSaleCreate(BaseModel):
 class SaleItemResponse(BaseModel):
     sale_id: int
     product_name: str
-    quantity_sold: int
+    quantity_sold: float
     unit_price: float
     total_amount: float
 

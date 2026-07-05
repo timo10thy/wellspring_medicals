@@ -151,7 +151,7 @@ def product_search(
             .filter(Stocks.product_id == product.id)
             .scalar()
         )
-        quantity_sold = int(sold_result or 0)
+        quantity_sold = float(sold_result or 0)
 
         # Initial quantity = available now + what was sold
         initial_quantity = available + quantity_sold

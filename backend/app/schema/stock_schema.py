@@ -25,7 +25,7 @@ class StockConsumptionReport(BaseModel):
     product_name: str
     current_quantity: int
     initial_stock_quantity: int
-    total_quantity_sold: int
+    total_quantity_sold: float
     average_daily_consumption: float
     estimated_days_remaining: int
 
